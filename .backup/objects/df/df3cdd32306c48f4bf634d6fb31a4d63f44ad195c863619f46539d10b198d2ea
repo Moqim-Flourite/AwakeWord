@@ -1,0 +1,183 @@
+package com.worddraft
+
+import android.Manifest
+import android.app.KeyguardManager
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.provider.Settings
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.worddraft.ui.screens.LockScreen
+import com.worddraft.ui.screens.MainScreen
+import com.worddraft.ui.screens.WordListScreen
+import com.worddraft.ui.theme.WordDraftTheme
+import com.worddraft.viewmodel.MainViewModel
+
+class MainActivity : ComponentActivity() {
+    
+    companion object {
+        private const val REQUEST_CODE_SYSTEM_ALERT_WINDOW = 1001
+    }
+    
+    private var isLaunchLockScreen = false
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        
+        setContent {
+            WordDraftTheme {
+                val navController = rememberNavController()
+                val viewModel: MainViewModel = viewModel(
+                    factory = WordDraftApplication.viewModelFactory
+                )
+                
+                val context = LocalContext.current
+                
+                // 监听锁屏启动请求
+                LaunchedEffect(Unit) {
+                    if (isLaunchLockScreen) {
+                        isLaunchLockScreen = false
+                        startLockScreenActivity()
+                    }
+                }
+                
+                NavHost(
+                    navController = navController,
+                    startDestination = "main"
+                ) {
+                    composable(
+                        route = "main",
+                        exitTransition = {
+                            slideOutOfContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Left,
+                                animationSpec = tween(300)
+                            )
+                        },
+                        popEnterTransition = {
+                            slideIntoContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Right,
+                                animationSpec = tween(300)
+                            )
+                        }
+                    ) {
+                        MainScreen(
+                            viewModel = viewModel,
+                            onNavigateToLockScreen = {
+                                // 检查权限并启动锁屏
+                                checkAndStartLockScreen()
+                            },
+                            onNavigateToWordList = {
+                                navController.navigate("list")
+                            }
+                        )
+                    }
+                    
+                    composable(
+                        route = "lock",
+                        enterTransition = {
+                            slideIntoContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Left,
+                                animationSpec = tween(300)
+                            )
+                        },
+                        exitTransition = {
+                            slideOutOfContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Right,
+                                animationSpec = tween(300)
+                            )
+                        }
+                    ) {
+                        LockScreen(
+                            viewModel = viewModel,
+                            onClose = {
+                                navController.popBackStack()
+                            }
+                        )
+                    }
+                    
+                    composable(
+                        route = "list",
+                        enterTransition = {
+                            slideIntoContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Left,
+                                animationSpec = tween(300)
+                            )
+                        },
+                        exitTransition = {
+                            slideOutOfContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Right,
+                                animationSpec = tween(300)
+                            )
+                        }
+                    ) {
+                        WordListScreen(
+                            viewModel = viewModel,
+                            onBack = {
+                                navController.popBackStack()
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+    
+    private fun checkAndStartLockScreen() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                // 没有悬浮窗权限，请求权限
+                Toast.makeText(
+                    this,
+                    "请在设置中开启「显示在其他应用上层」权限",
+                    Toast.LENGTH_LONG
+                ).show()
+                
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+                startActivityForResult(intent, REQUEST_CODE_SYSTEM_ALERT_WINDOW)
+                isLaunchLockScreen = true
+            } else {
+                startLockScreenActivity()
+            }
+        } else {
+            startLockScreenActivity()
+        }
+    }
+    
+    private fun startLockScreenActivity() {
+        val intent = Intent(this, LockScreenActivity::class.java)
+        startActivity(intent)
+    }
+    
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CODE_SYSTEM_ALERT_WINDOW) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
+                Toast.makeText(this, "权限已获取，请再次点击锁屏按钮", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "未获取权限，锁屏功能可能无法正常工作", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+}

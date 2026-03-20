@@ -1,0 +1,269 @@
+package com.worddraft
+
+import android.os.Build
+import android.os.Bundle
+import android.util.Log
+import android.view.WindowManager
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.worddraft.ui.components.WordCardCompact
+import com.worddraft.ui.theme.*
+import com.worddraft.util.TtsManager
+import com.worddraft.viewmodel.MainViewModel
+
+/**
+ * 独立的锁屏Activity
+ * 在锁屏界面显示单词卡片
+ * 解锁后保持显示，直到用户手动关闭或学完所有单词
+ */
+class LockScreenActivity : ComponentActivity() {
+    
+    companion object {
+        private const val TAG = "LockScreenActivity"
+    }
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // 设置在锁屏上显示
+        setupLockScreen()
+        
+        enableEdgeToEdge()
+        
+        setContent {
+            WordDraftTheme {
+                val viewModel: MainViewModel = viewModel(
+                    factory = WordDraftApplication.viewModelFactory
+                )
+                
+                // 初始化当前批次
+                LaunchedEffect(Unit) {
+                    viewModel.initCurrentBatch()
+                }
+                
+                // 监听是否全部学完
+                val currentPageWords by viewModel.currentPageWords.collectAsState()
+                val totalCount by viewModel.totalCount.collectAsState()
+                
+                // 当全部学完时自动关闭
+                LaunchedEffect(currentPageWords.isEmpty(), totalCount) {
+                    if (currentPageWords.isEmpty() && totalCount > 0) {
+                        // 延迟一下让用户看到完成状态
+                        kotlinx.coroutines.delay(1500)
+                        finish()
+                    }
+                }
+                
+                LockScreenContent(
+                    viewModel = viewModel,
+                    onClose = { 
+                        // 直接关闭，不解锁
+                        finish() 
+                    }
+                )
+            }
+        }
+    }
+    
+    private fun setupLockScreen() {
+        // 关键：在锁屏上显示，但不自动解除锁屏
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            )
+        }
+        
+        // 保持屏幕常亮（用户看单词时）
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        
+        // 设置窗口为全屏
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_FULLSCREEN,
+            WindowManager.LayoutParams.FLAG_FULLSCREEN
+        )
+    }
+}
+
+@Composable
+private fun LockScreenContent(
+    viewModel: MainViewModel,
+    onClose: () -> Unit
+) {
+    val currentPageWords by viewModel.currentPageWords.collectAsState()
+    val uncheckedCount by viewModel.uncheckedCount.collectAsState()
+    val isCurrentPageComplete by viewModel.isCurrentPageComplete.collectAsState()
+    
+    // 初始化TTS
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        TtsManager.init(context)
+    }
+    
+    // 监听当前页完成状态，自动刷新
+    LaunchedEffect(isCurrentPageComplete) {
+        if (isCurrentPageComplete) {
+            // 等待一小段时间让用户看到完成状态
+            kotlinx.coroutines.delay(500)
+            viewModel.refreshToNextPage()
+        }
+    }
+    
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Background,
+                        Color(0xFF0D0D1A)
+                    )
+                )
+            )
+    ) {
+        // 顶部：标题和关闭按钮
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "单词草稿本",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color.White
+                )
+                Text(
+                    text = "待复习: $uncheckedCount 个单词",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary
+                )
+            }
+            
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "关闭",
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+        
+        // 中间：单词卡片列表
+        if (currentPageWords.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "🎉",
+                        style = MaterialTheme.typography.headlineLarge
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "全部记完了！",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "可以添加更多单词继续学习",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 100.dp, bottom = 80.dp, start = 16.dp, end = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(
+                    items = currentPageWords,
+                    key = { it.id }
+                ) { word ->
+                    WordCardCompact(
+                        word = word,
+                        onSpeak = { TtsManager.speak(word.spelling) },
+                        onCheckChange = { isChecked ->
+                            if (isChecked) {
+                                viewModel.checkWord(word)
+                            } else {
+                                viewModel.uncheckWord(word)
+                            }
+                        }
+                    )
+                }
+            }
+        }
+        
+        // 底部：提示或刷新按钮
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 24.dp)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (isCurrentPageComplete && currentPageWords.isNotEmpty()) {
+                // 显示刷新按钮
+                Button(
+                    onClick = { viewModel.refreshToNextPage() },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Primary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("下一组")
+                }
+            } else {
+                Text(
+                    text = "点击 🔊 播放发音 · 点击 ⭕ 勾选已记住",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary.copy(alpha = 0.5f),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}

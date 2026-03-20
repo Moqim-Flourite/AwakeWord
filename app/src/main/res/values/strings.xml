@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">AwakeWord</string>
+    <string name="app_name_cn">醒词</string>
+    <string name="accessibility_service_description">AwakeWord需要无障碍服务来监听屏幕亮起事件，以便在锁屏界面显示单词卡片。本服务不会收集任何个人信息，仅用于检测屏幕状态。</string>
+</resources>

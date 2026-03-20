@@ -1,0 +1,201 @@
+package com.worddraft.util
+
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioManager
+import android.media.MediaPlayer
+import android.os.Build
+import android.util.Log
+import java.util.concurrent.ConcurrentLinkedQueue
+
+/**
+ * TTS语音工具类
+ * 使用有道词典在线发音API
+ * 支持美音/英音切换
+ */
+object TtsManager {
+    
+    private const val TAG = "TtsManager"
+    
+    // 有道词典发音API
+    private const val YOUDAO_TTS_URL = "https://dict.youdao.com/dictvoice"
+    
+    // 发音类型：0=美音，1=英音
+    const val TYPE_AMERICAN = 0  // 美音
+    const val TYPE_BRITISH = 1   // 英音
+    
+    private const val PREFS_NAME = "worddraft_tts_prefs"
+    private const val KEY_ACCENT_TYPE = "accent_type"
+    
+    private var mediaPlayer: MediaPlayer? = null
+    private var applicationContext: Context? = null
+    private val playQueue = ConcurrentLinkedQueue<String>()
+    private var isPlaying = false
+    
+    // 当前发音类型
+    private var currentAccentType: Int = TYPE_AMERICAN
+    
+    /**
+     * 预初始化 - 在Application启动时调用
+     */
+    fun preInit(context: Context) {
+        Log.d(TAG, "preInit() called from Application")
+        applicationContext = context.applicationContext
+    }
+    
+    /**
+     * 初始化（保持接口兼容）
+     */
+    fun init(context: Context, onReady: (() -> Unit)? = null) {
+        applicationContext = context.applicationContext
+        onReady?.invoke()
+    }
+    
+    /**
+     * 朗读单词 - 使用有道在线发音
+     */
+    fun speak(word: String) {
+        Log.d(TAG, "speak() called: $word")
+        
+        if (word.isBlank()) {
+            Log.w(TAG, "Empty word, skipping")
+            return
+        }
+        
+        // 添加到播放队列
+        playQueue.offer(word)
+        
+        // 如果没有在播放，开始播放
+        if (!isPlaying) {
+            playNext()
+        }
+    }
+    
+    private fun playNext() {
+        val word = playQueue.poll()
+        if (word == null) {
+            isPlaying = false
+            Log.d(TAG, "Queue empty, playback finished")
+            return
+        }
+        
+        isPlaying = true
+        playYoudaoAudio(word) {
+            // 播放完成后继续下一个
+            playNext()
+        }
+    }
+    
+    /**
+     * 使用有道词典API播放发音
+     */
+    private fun playYoudaoAudio(word: String, onComplete: () -> Unit) {
+        val context = applicationContext
+        if (context == null) {
+            Log.e(TAG, "ApplicationContext is null")
+            isPlaying = false
+            return
+        }
+        
+        // 构建有道发音URL
+        val url = "$YOUDAO_TTS_URL?audio=${java.net.URLEncoder.encode(word, "UTF-8")}&type=$DEFAULT_TYPE"
+        Log.d(TAG, "Playing Youdao TTS: $url")
+        
+        try {
+            // 释放之前的播放器
+            releaseMediaPlayer()
+            
+            mediaPlayer = MediaPlayer().apply {
+                // 设置音频属性
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    setAudioStreamType(AudioManager.STREAM_MUSIC)
+                }
+                
+                // 设置错误监听器
+                setOnErrorListener { mp, what, extra ->
+                    Log.e(TAG, "MediaPlayer error: what=$what, extra=$extra")
+                    releaseMediaPlayer()
+                    onComplete()
+                    true
+                }
+                
+                // 设置完成监听器
+                setOnCompletionListener { mp ->
+                    Log.d(TAG, "Playback completed for: $word")
+                    releaseMediaPlayer()
+                    onComplete()
+                }
+                
+                // 设置准备监听器
+                setOnPreparedListener { mp ->
+                    Log.d(TAG, "MediaPlayer prepared, starting playback")
+                    mp.start()
+                }
+                
+                // 异步加载
+                setDataSource(url)
+                prepareAsync()
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception playing audio: ${e.message}", e)
+            releaseMediaPlayer()
+            onComplete()
+        }
+    }
+    
+    /**
+     * 释放MediaPlayer资源
+     */
+    private fun releaseMediaPlayer() {
+        try {
+            mediaPlayer?.let {
+                if (it.isPlaying) {
+                    it.stop()
+                }
+                it.reset()
+                it.release()
+            }
+            mediaPlayer = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing MediaPlayer: ${e.message}")
+        }
+    }
+    
+    /**
+     * 停止朗读
+     */
+    fun stop() {
+        Log.d(TAG, "stop() called")
+        playQueue.clear()
+        releaseMediaPlayer()
+        isPlaying = false
+    }
+    
+    /**
+     * 释放资源
+     */
+    fun shutdown() {
+        Log.d(TAG, "shutdown() called")
+        stop()
+        applicationContext = null
+    }
+    
+    /**
+     * 检查TTS是否可用（在线模式始终可用）
+     */
+    fun isReady(): Boolean = true
+    
+    /**
+     * 检查TTS数据是否可用
+     */
+    fun checkTtsData(context: Context): Boolean = true
+}

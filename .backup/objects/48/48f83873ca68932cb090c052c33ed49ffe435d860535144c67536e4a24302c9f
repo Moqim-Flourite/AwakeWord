@@ -1,0 +1,93 @@
+package com.worddraft.ui.screens
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.worddraft.ui.components.WordCard
+import com.worddraft.ui.theme.Primary
+import com.worddraft.util.TtsManager
+import com.worddraft.viewmodel.MainViewModel
+
+/**
+ * 单词列表界面（显示所有单词）
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun WordListScreen(
+    viewModel: MainViewModel = viewModel(),
+    onBack: () -> Unit = {}
+) {
+    val allWords by viewModel.allWords.collectAsState()
+    
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { 
+                    Text("全部单词 (${allWords.size})") 
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground
+                ),
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = "返回"
+                        )
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        if (allWords.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = androidx.compose.ui.Alignment.Center
+            ) {
+                Text(
+                    text = "暂无单词",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(
+                    items = allWords,
+                    key = { it.id }
+                ) { word ->
+                    WordCard(
+                        word = word,
+                        onSpeak = { TtsManager.speak(word.spelling) },
+                        onCheckChange = { isChecked ->
+                            if (isChecked) {
+                                viewModel.checkWord(word)
+                            } else {
+                                viewModel.uncheckWord(word)
+                            }
+                        },
+                        onNoteChange = { note ->
+                            viewModel.updateNote(word, note)
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
