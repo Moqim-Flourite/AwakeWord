@@ -1,0 +1,197 @@
+package com.worddraft.ui.screens
+
+import android.app.KeyguardManager
+import android.content.Context
+import android.os.Build
+import android.view.WindowManager
+import androidx.activity.ComponentActivity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.worddraft.ui.components.DisplayMode
+import com.worddraft.ui.components.WordCardCompact
+import com.worddraft.ui.theme.*
+import com.worddraft.util.TtsManager
+import com.worddraft.viewmodel.MainViewModel
+
+/**
+ * 锁屏显示界面
+ */
+@Composable
+fun LockScreen(
+    viewModel: MainViewModel = viewModel(),
+    onClose: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    val currentPageWords by viewModel.currentPageWords.collectAsState()
+    val uncheckedCount by viewModel.uncheckedCount.collectAsState()
+    
+    // 设置锁屏显示
+    LaunchedEffect(Unit) {
+        TtsManager.init(context)
+        setupLockScreen(context)
+    }
+    
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Background,
+                        Color(0xFF0D0D1A)
+                    )
+                )
+            )
+    ) {
+        // 顶部：标题和关闭按钮
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "单词草稿本",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color.White
+                )
+                Text(
+                    text = "待复习: $uncheckedCount 个单词",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary
+                )
+            }
+            
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier
+                    .size(48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "关闭",
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+        
+        // 中间：单词卡片列表
+        if (currentPageWords.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "🎉",
+                        style = MaterialTheme.typography.headlineLarge
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "全部记完了！",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "可以添加更多单词继续学习",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 100.dp, bottom = 32.dp, start = 16.dp, end = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(
+                    items = currentPageWords.take(5),
+                    key = { it.id }
+                ) { word ->
+                    LockScreenWordCard(
+                        word = word,
+                        onSpeak = { TtsManager.speak(word.spelling) },
+                        onCheckChange = { isChecked ->
+                            if (isChecked) {
+                                viewModel.checkWord(word)
+                            } else {
+                                viewModel.uncheckWord(word)
+                            }
+                        }
+                    )
+                }
+                
+                // 底部提示
+                item {
+                    if (currentPageWords.size > 5) {
+                        Text(
+                            text = "还有 ${currentPageWords.size - 5} 个单词等待复习...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 16.dp)
+                        )
+                    }
+                }
+            }
+        }
+        
+        // 底部提示
+        Text(
+            text = "点击 🔊 播放发音 · 点击 ⭕ 勾选已记住",
+            style = MaterialTheme.typography.labelSmall,
+            color = TextSecondary.copy(alpha = 0.5f),
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 24.dp)
+        )
+    }
+}
+
+/**
+ * 设置锁屏显示
+ */
+private fun setupLockScreen(context: Context) {
+    val activity = context as? ComponentActivity ?: return
+    
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+        activity.setShowWhenLocked(true)
+        val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+        keyguardManager.requestDismissKeyguard(activity, null)
+    } else {
+        @Suppress("DEPRECATION")
+        activity.window.addFlags(
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+            WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+        )
+    }
+    
+    // 保持屏幕常亮
+    activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+}

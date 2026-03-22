@@ -14,6 +14,10 @@ import androidx.room.util.CursorUtil;
 import androidx.room.util.DBUtil;
 import androidx.sqlite.db.SupportSQLiteStatement;
 import com.worddraft.data.model.Word;
+import com.worddraft.data.model.WordBatch;
+import com.worddraft.data.model.WordMonth;
+import com.worddraft.data.model.WordWeek;
+import com.worddraft.data.model.WordYear;
 import java.lang.Boolean;
 import java.lang.Class;
 import java.lang.Exception;
@@ -440,7 +444,7 @@ public final class WordDao_Impl implements WordDao {
 
   @Override
   public Flow<List<Word>> getCurrentPageWords() {
-    final String _sql = "SELECT * FROM words WHERE isChecked = 0 ORDER BY displayOrder ASC, createdAt ASC LIMIT 8";
+    final String _sql = "SELECT * FROM words WHERE isChecked = 0 ORDER BY displayOrder ASC, createdAt ASC LIMIT 5";
     final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 0);
     return CoroutinesRoom.createFlow(__db, false, new String[] {"words"}, new Callable<List<Word>>() {
       @Override
@@ -638,6 +642,402 @@ public final class WordDao_Impl implements WordDao {
         }
       }
     }, $completion);
+  }
+
+  @Override
+  public Flow<List<Word>> getWordsByDateRange(final long startTime, final long endTime) {
+    final String _sql = "SELECT * FROM words WHERE createdAt >= ? AND createdAt < ? ORDER BY createdAt DESC";
+    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 2);
+    int _argIndex = 1;
+    _statement.bindLong(_argIndex, startTime);
+    _argIndex = 2;
+    _statement.bindLong(_argIndex, endTime);
+    return CoroutinesRoom.createFlow(__db, false, new String[] {"words"}, new Callable<List<Word>>() {
+      @Override
+      @NonNull
+      public List<Word> call() throws Exception {
+        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
+        try {
+          final int _cursorIndexOfId = CursorUtil.getColumnIndexOrThrow(_cursor, "id");
+          final int _cursorIndexOfSpelling = CursorUtil.getColumnIndexOrThrow(_cursor, "spelling");
+          final int _cursorIndexOfPhonetic = CursorUtil.getColumnIndexOrThrow(_cursor, "phonetic");
+          final int _cursorIndexOfMeaning = CursorUtil.getColumnIndexOrThrow(_cursor, "meaning");
+          final int _cursorIndexOfNote = CursorUtil.getColumnIndexOrThrow(_cursor, "note");
+          final int _cursorIndexOfIsChecked = CursorUtil.getColumnIndexOrThrow(_cursor, "isChecked");
+          final int _cursorIndexOfCreatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "createdAt");
+          final int _cursorIndexOfDisplayOrder = CursorUtil.getColumnIndexOrThrow(_cursor, "displayOrder");
+          final List<Word> _result = new ArrayList<Word>(_cursor.getCount());
+          while (_cursor.moveToNext()) {
+            final Word _item;
+            final long _tmpId;
+            _tmpId = _cursor.getLong(_cursorIndexOfId);
+            final String _tmpSpelling;
+            _tmpSpelling = _cursor.getString(_cursorIndexOfSpelling);
+            final String _tmpPhonetic;
+            _tmpPhonetic = _cursor.getString(_cursorIndexOfPhonetic);
+            final String _tmpMeaning;
+            _tmpMeaning = _cursor.getString(_cursorIndexOfMeaning);
+            final String _tmpNote;
+            _tmpNote = _cursor.getString(_cursorIndexOfNote);
+            final boolean _tmpIsChecked;
+            final int _tmp;
+            _tmp = _cursor.getInt(_cursorIndexOfIsChecked);
+            _tmpIsChecked = _tmp != 0;
+            final long _tmpCreatedAt;
+            _tmpCreatedAt = _cursor.getLong(_cursorIndexOfCreatedAt);
+            final int _tmpDisplayOrder;
+            _tmpDisplayOrder = _cursor.getInt(_cursorIndexOfDisplayOrder);
+            _item = new Word(_tmpId,_tmpSpelling,_tmpPhonetic,_tmpMeaning,_tmpNote,_tmpIsChecked,_tmpCreatedAt,_tmpDisplayOrder);
+            _result.add(_item);
+          }
+          return _result;
+        } finally {
+          _cursor.close();
+        }
+      }
+
+      @Override
+      protected void finalize() {
+        _statement.release();
+      }
+    });
+  }
+
+  @Override
+  public Object getWordsByDateRangeOnce(final long startTime, final long endTime,
+      final Continuation<? super List<Word>> $completion) {
+    final String _sql = "SELECT * FROM words WHERE createdAt >= ? AND createdAt < ? ORDER BY createdAt DESC";
+    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 2);
+    int _argIndex = 1;
+    _statement.bindLong(_argIndex, startTime);
+    _argIndex = 2;
+    _statement.bindLong(_argIndex, endTime);
+    final CancellationSignal _cancellationSignal = DBUtil.createCancellationSignal();
+    return CoroutinesRoom.execute(__db, false, _cancellationSignal, new Callable<List<Word>>() {
+      @Override
+      @NonNull
+      public List<Word> call() throws Exception {
+        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
+        try {
+          final int _cursorIndexOfId = CursorUtil.getColumnIndexOrThrow(_cursor, "id");
+          final int _cursorIndexOfSpelling = CursorUtil.getColumnIndexOrThrow(_cursor, "spelling");
+          final int _cursorIndexOfPhonetic = CursorUtil.getColumnIndexOrThrow(_cursor, "phonetic");
+          final int _cursorIndexOfMeaning = CursorUtil.getColumnIndexOrThrow(_cursor, "meaning");
+          final int _cursorIndexOfNote = CursorUtil.getColumnIndexOrThrow(_cursor, "note");
+          final int _cursorIndexOfIsChecked = CursorUtil.getColumnIndexOrThrow(_cursor, "isChecked");
+          final int _cursorIndexOfCreatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "createdAt");
+          final int _cursorIndexOfDisplayOrder = CursorUtil.getColumnIndexOrThrow(_cursor, "displayOrder");
+          final List<Word> _result = new ArrayList<Word>(_cursor.getCount());
+          while (_cursor.moveToNext()) {
+            final Word _item;
+            final long _tmpId;
+            _tmpId = _cursor.getLong(_cursorIndexOfId);
+            final String _tmpSpelling;
+            _tmpSpelling = _cursor.getString(_cursorIndexOfSpelling);
+            final String _tmpPhonetic;
+            _tmpPhonetic = _cursor.getString(_cursorIndexOfPhonetic);
+            final String _tmpMeaning;
+            _tmpMeaning = _cursor.getString(_cursorIndexOfMeaning);
+            final String _tmpNote;
+            _tmpNote = _cursor.getString(_cursorIndexOfNote);
+            final boolean _tmpIsChecked;
+            final int _tmp;
+            _tmp = _cursor.getInt(_cursorIndexOfIsChecked);
+            _tmpIsChecked = _tmp != 0;
+            final long _tmpCreatedAt;
+            _tmpCreatedAt = _cursor.getLong(_cursorIndexOfCreatedAt);
+            final int _tmpDisplayOrder;
+            _tmpDisplayOrder = _cursor.getInt(_cursorIndexOfDisplayOrder);
+            _item = new Word(_tmpId,_tmpSpelling,_tmpPhonetic,_tmpMeaning,_tmpNote,_tmpIsChecked,_tmpCreatedAt,_tmpDisplayOrder);
+            _result.add(_item);
+          }
+          return _result;
+        } finally {
+          _cursor.close();
+          _statement.release();
+        }
+      }
+    }, $completion);
+  }
+
+  @Override
+  public Flow<List<WordBatch>> getBatches() {
+    final String _sql = "\n"
+            + "        SELECT \n"
+            + "            date(createdAt / 1000, 'unixepoch', 'localtime') as date,\n"
+            + "            MIN(createdAt) as timestamp,\n"
+            + "            COUNT(*) as totalCount,\n"
+            + "            SUM(CASE WHEN isChecked = 0 THEN 1 ELSE 0 END) as uncheckedCount\n"
+            + "        FROM words\n"
+            + "        GROUP BY date\n"
+            + "        ORDER BY timestamp DESC\n"
+            + "    ";
+    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 0);
+    return CoroutinesRoom.createFlow(__db, false, new String[] {"words"}, new Callable<List<WordBatch>>() {
+      @Override
+      @NonNull
+      public List<WordBatch> call() throws Exception {
+        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
+        try {
+          final int _cursorIndexOfDate = 0;
+          final int _cursorIndexOfTimestamp = 1;
+          final int _cursorIndexOfTotalCount = 2;
+          final int _cursorIndexOfUncheckedCount = 3;
+          final List<WordBatch> _result = new ArrayList<WordBatch>(_cursor.getCount());
+          while (_cursor.moveToNext()) {
+            final WordBatch _item;
+            final String _tmpDate;
+            _tmpDate = _cursor.getString(_cursorIndexOfDate);
+            final long _tmpTimestamp;
+            _tmpTimestamp = _cursor.getLong(_cursorIndexOfTimestamp);
+            final int _tmpTotalCount;
+            _tmpTotalCount = _cursor.getInt(_cursorIndexOfTotalCount);
+            final int _tmpUncheckedCount;
+            _tmpUncheckedCount = _cursor.getInt(_cursorIndexOfUncheckedCount);
+            _item = new WordBatch(_tmpDate,_tmpTimestamp,_tmpTotalCount,_tmpUncheckedCount);
+            _result.add(_item);
+          }
+          return _result;
+        } finally {
+          _cursor.close();
+        }
+      }
+
+      @Override
+      protected void finalize() {
+        _statement.release();
+      }
+    });
+  }
+
+  @Override
+  public Flow<List<WordYear>> getYears() {
+    final String _sql = "\n"
+            + "        SELECT \n"
+            + "            CAST(strftime('%Y', datetime(createdAt / 1000, 'unixepoch', 'localtime')) AS INTEGER) as year,\n"
+            + "            MIN(createdAt) as timestamp,\n"
+            + "            COUNT(*) as totalCount,\n"
+            + "            SUM(CASE WHEN isChecked = 0 THEN 1 ELSE 0 END) as uncheckedCount\n"
+            + "        FROM words\n"
+            + "        GROUP BY year\n"
+            + "        ORDER BY year DESC\n"
+            + "    ";
+    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 0);
+    return CoroutinesRoom.createFlow(__db, false, new String[] {"words"}, new Callable<List<WordYear>>() {
+      @Override
+      @NonNull
+      public List<WordYear> call() throws Exception {
+        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
+        try {
+          final int _cursorIndexOfYear = 0;
+          final int _cursorIndexOfTimestamp = 1;
+          final int _cursorIndexOfTotalCount = 2;
+          final int _cursorIndexOfUncheckedCount = 3;
+          final List<WordYear> _result = new ArrayList<WordYear>(_cursor.getCount());
+          while (_cursor.moveToNext()) {
+            final WordYear _item;
+            final int _tmpYear;
+            _tmpYear = _cursor.getInt(_cursorIndexOfYear);
+            final long _tmpTimestamp;
+            _tmpTimestamp = _cursor.getLong(_cursorIndexOfTimestamp);
+            final int _tmpTotalCount;
+            _tmpTotalCount = _cursor.getInt(_cursorIndexOfTotalCount);
+            final int _tmpUncheckedCount;
+            _tmpUncheckedCount = _cursor.getInt(_cursorIndexOfUncheckedCount);
+            _item = new WordYear(_tmpYear,_tmpTimestamp,_tmpTotalCount,_tmpUncheckedCount);
+            _result.add(_item);
+          }
+          return _result;
+        } finally {
+          _cursor.close();
+        }
+      }
+
+      @Override
+      protected void finalize() {
+        _statement.release();
+      }
+    });
+  }
+
+  @Override
+  public Flow<List<WordMonth>> getMonthsByYear(final long yearStartTime, final long yearEndTime) {
+    final String _sql = "\n"
+            + "        SELECT \n"
+            + "            CAST(strftime('%Y', datetime(createdAt / 1000, 'unixepoch', 'localtime')) AS INTEGER) as year,\n"
+            + "            CAST(strftime('%m', datetime(createdAt / 1000, 'unixepoch', 'localtime')) AS INTEGER) as month,\n"
+            + "            MIN(createdAt) as timestamp,\n"
+            + "            COUNT(*) as totalCount,\n"
+            + "            SUM(CASE WHEN isChecked = 0 THEN 1 ELSE 0 END) as uncheckedCount\n"
+            + "        FROM words\n"
+            + "        WHERE createdAt >= ? AND createdAt < ?\n"
+            + "        GROUP BY year, month\n"
+            + "        ORDER BY month DESC\n"
+            + "    ";
+    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 2);
+    int _argIndex = 1;
+    _statement.bindLong(_argIndex, yearStartTime);
+    _argIndex = 2;
+    _statement.bindLong(_argIndex, yearEndTime);
+    return CoroutinesRoom.createFlow(__db, false, new String[] {"words"}, new Callable<List<WordMonth>>() {
+      @Override
+      @NonNull
+      public List<WordMonth> call() throws Exception {
+        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
+        try {
+          final int _cursorIndexOfYear = 0;
+          final int _cursorIndexOfMonth = 1;
+          final int _cursorIndexOfTimestamp = 2;
+          final int _cursorIndexOfTotalCount = 3;
+          final int _cursorIndexOfUncheckedCount = 4;
+          final List<WordMonth> _result = new ArrayList<WordMonth>(_cursor.getCount());
+          while (_cursor.moveToNext()) {
+            final WordMonth _item;
+            final int _tmpYear;
+            _tmpYear = _cursor.getInt(_cursorIndexOfYear);
+            final int _tmpMonth;
+            _tmpMonth = _cursor.getInt(_cursorIndexOfMonth);
+            final long _tmpTimestamp;
+            _tmpTimestamp = _cursor.getLong(_cursorIndexOfTimestamp);
+            final int _tmpTotalCount;
+            _tmpTotalCount = _cursor.getInt(_cursorIndexOfTotalCount);
+            final int _tmpUncheckedCount;
+            _tmpUncheckedCount = _cursor.getInt(_cursorIndexOfUncheckedCount);
+            _item = new WordMonth(_tmpYear,_tmpMonth,_tmpTimestamp,_tmpTotalCount,_tmpUncheckedCount);
+            _result.add(_item);
+          }
+          return _result;
+        } finally {
+          _cursor.close();
+        }
+      }
+
+      @Override
+      protected void finalize() {
+        _statement.release();
+      }
+    });
+  }
+
+  @Override
+  public Flow<List<WordWeek>> getWeeksByMonth(final long monthStartTime, final long monthEndTime) {
+    final String _sql = "\n"
+            + "        SELECT \n"
+            + "            CAST(strftime('%Y', datetime(createdAt / 1000, 'unixepoch', 'localtime')) AS INTEGER) as year,\n"
+            + "            CAST(strftime('%m', datetime(createdAt / 1000, 'unixepoch', 'localtime')) AS INTEGER) as month,\n"
+            + "            CAST(strftime('%W', datetime(createdAt / 1000, 'unixepoch', 'localtime')) AS INTEGER) -\n"
+            + "            CAST(strftime('%W', datetime(? / 1000, 'unixepoch', 'localtime')) AS INTEGER) + 1 as weekOfMonth,\n"
+            + "            MIN(createdAt) as timestamp,\n"
+            + "            COUNT(*) as totalCount,\n"
+            + "            SUM(CASE WHEN isChecked = 0 THEN 1 ELSE 0 END) as uncheckedCount\n"
+            + "        FROM words\n"
+            + "        WHERE createdAt >= ? AND createdAt < ?\n"
+            + "        GROUP BY year, weekOfMonth\n"
+            + "        ORDER BY weekOfMonth DESC\n"
+            + "    ";
+    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 3);
+    int _argIndex = 1;
+    _statement.bindLong(_argIndex, monthStartTime);
+    _argIndex = 2;
+    _statement.bindLong(_argIndex, monthStartTime);
+    _argIndex = 3;
+    _statement.bindLong(_argIndex, monthEndTime);
+    return CoroutinesRoom.createFlow(__db, false, new String[] {"words"}, new Callable<List<WordWeek>>() {
+      @Override
+      @NonNull
+      public List<WordWeek> call() throws Exception {
+        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
+        try {
+          final int _cursorIndexOfYear = 0;
+          final int _cursorIndexOfMonth = 1;
+          final int _cursorIndexOfWeekOfMonth = 2;
+          final int _cursorIndexOfTimestamp = 3;
+          final int _cursorIndexOfTotalCount = 4;
+          final int _cursorIndexOfUncheckedCount = 5;
+          final List<WordWeek> _result = new ArrayList<WordWeek>(_cursor.getCount());
+          while (_cursor.moveToNext()) {
+            final WordWeek _item;
+            final int _tmpYear;
+            _tmpYear = _cursor.getInt(_cursorIndexOfYear);
+            final int _tmpMonth;
+            _tmpMonth = _cursor.getInt(_cursorIndexOfMonth);
+            final int _tmpWeekOfMonth;
+            _tmpWeekOfMonth = _cursor.getInt(_cursorIndexOfWeekOfMonth);
+            final long _tmpTimestamp;
+            _tmpTimestamp = _cursor.getLong(_cursorIndexOfTimestamp);
+            final int _tmpTotalCount;
+            _tmpTotalCount = _cursor.getInt(_cursorIndexOfTotalCount);
+            final int _tmpUncheckedCount;
+            _tmpUncheckedCount = _cursor.getInt(_cursorIndexOfUncheckedCount);
+            _item = new WordWeek(_tmpYear,_tmpMonth,_tmpWeekOfMonth,_tmpTimestamp,_tmpTotalCount,_tmpUncheckedCount);
+            _result.add(_item);
+          }
+          return _result;
+        } finally {
+          _cursor.close();
+        }
+      }
+
+      @Override
+      protected void finalize() {
+        _statement.release();
+      }
+    });
+  }
+
+  @Override
+  public Flow<List<WordBatch>> getBatchesByDateRange(final long startTime, final long endTime) {
+    final String _sql = "\n"
+            + "        SELECT \n"
+            + "            date(createdAt / 1000, 'unixepoch', 'localtime') as date,\n"
+            + "            MIN(createdAt) as timestamp,\n"
+            + "            COUNT(*) as totalCount,\n"
+            + "            SUM(CASE WHEN isChecked = 0 THEN 1 ELSE 0 END) as uncheckedCount\n"
+            + "        FROM words\n"
+            + "        WHERE createdAt >= ? AND createdAt < ?\n"
+            + "        GROUP BY date\n"
+            + "        ORDER BY timestamp DESC\n"
+            + "    ";
+    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 2);
+    int _argIndex = 1;
+    _statement.bindLong(_argIndex, startTime);
+    _argIndex = 2;
+    _statement.bindLong(_argIndex, endTime);
+    return CoroutinesRoom.createFlow(__db, false, new String[] {"words"}, new Callable<List<WordBatch>>() {
+      @Override
+      @NonNull
+      public List<WordBatch> call() throws Exception {
+        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
+        try {
+          final int _cursorIndexOfDate = 0;
+          final int _cursorIndexOfTimestamp = 1;
+          final int _cursorIndexOfTotalCount = 2;
+          final int _cursorIndexOfUncheckedCount = 3;
+          final List<WordBatch> _result = new ArrayList<WordBatch>(_cursor.getCount());
+          while (_cursor.moveToNext()) {
+            final WordBatch _item;
+            final String _tmpDate;
+            _tmpDate = _cursor.getString(_cursorIndexOfDate);
+            final long _tmpTimestamp;
+            _tmpTimestamp = _cursor.getLong(_cursorIndexOfTimestamp);
+            final int _tmpTotalCount;
+            _tmpTotalCount = _cursor.getInt(_cursorIndexOfTotalCount);
+            final int _tmpUncheckedCount;
+            _tmpUncheckedCount = _cursor.getInt(_cursorIndexOfUncheckedCount);
+            _item = new WordBatch(_tmpDate,_tmpTimestamp,_tmpTotalCount,_tmpUncheckedCount);
+            _result.add(_item);
+          }
+          return _result;
+        } finally {
+          _cursor.close();
+        }
+      }
+
+      @Override
+      protected void finalize() {
+        _statement.release();
+      }
+    });
   }
 
   @NonNull

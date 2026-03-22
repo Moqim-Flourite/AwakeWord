@@ -1,0 +1,100 @@
+package com.worddraft.data.local
+
+import androidx.room.*
+import com.worddraft.data.model.Word
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface WordDao {
+    
+    /**
+     * 获取所有未勾选的单词（按显示顺序）
+     */
+    @Query("SELECT * FROM words WHERE isChecked = 0 ORDER BY displayOrder ASC, createdAt DESC")
+    fun getUncheckedWords(): Flow<List<Word>>
+    
+    /**
+     * 获取所有未勾选的单词（一次性查询，非Flow）
+     */
+    @Query("SELECT * FROM words WHERE isChecked = 0 ORDER BY displayOrder ASC, createdAt ASC")
+    suspend fun getUncheckedWordsOnce(): List<Word>
+    
+    /**
+     * 获取所有单词（按显示顺序）
+     */
+    @Query("SELECT * FROM words ORDER BY displayOrder ASC, createdAt DESC")
+    fun getAllWords(): Flow<List<Word>>
+    
+    /**
+     * 获取当前显示页面的单词（最多5个，按原始顺序）
+     * 只获取未勾选的单词，勾选后单词从当前页移除
+     */
+    @Query("SELECT * FROM words WHERE isChecked = 0 ORDER BY displayOrder ASC, createdAt ASC LIMIT 5")
+    fun getCurrentPageWords(): Flow<List<Word>>
+    
+    /**
+     * 获取未勾选单词数量
+     */
+    @Query("SELECT COUNT(*) FROM words WHERE isChecked = 0")
+    fun getUncheckedCount(): Flow<Int>
+    
+    /**
+     * 获取总单词数量
+     */
+    @Query("SELECT COUNT(*) FROM words")
+    fun getTotalCount(): Flow<Int>
+    
+    /**
+     * 插入单词
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWord(word: Word): Long
+    
+    /**
+     * 批量插入单词
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWords(words: List<Word>)
+    
+    /**
+     * 更新单词
+     */
+    @Update
+    suspend fun updateWord(word: Word)
+    
+    /**
+     * 删除单词
+     */
+    @Delete
+    suspend fun deleteWord(word: Word)
+    
+    /**
+     * 根据ID获取单词
+     */
+    @Query("SELECT * FROM words WHERE id = :wordId")
+    suspend fun getWordById(wordId: Long): Word?
+    
+    /**
+     * 检查单词是否已存在
+     */
+    @Query("SELECT EXISTS(SELECT 1 FROM words WHERE spelling = :spelling COLLATE NOCASE)")
+    suspend fun isWordExists(spelling: String): Boolean
+    
+    /**
+     * 将单词移到队列末尾（设置最大的displayOrder）
+     */
+    @Query("UPDATE words SET displayOrder = (SELECT COALESCE(MAX(displayOrder), 0) + 1 FROM words) WHERE id = :wordId")
+    suspend fun moveToEnd(wordId: Long)
+    
+    /**
+     * 清空所有单词
+     */
+    @Query("DELETE FROM words")
+    suspend fun deleteAll()
+    
+    /**
+     * 重置所有单词的勾选状态
+     */
+    @Query("UPDATE words SET isChecked = 0")
+    suspend fun resetAllChecked()
+}

@@ -1,0 +1,241 @@
+package com.worddraft.viewmodel
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.worddraft.data.model.Word
+import com.worddraft.data.model.WordBatch
+import com.worddraft.data.repository.WordRepository
+import com.worddraft.util.DictionaryApi
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+
+/**
+ * 主界面 ViewModel
+ * 管理单词列表和勾选逻辑
+ */
+class MainViewModel(
+    private val repository: WordRepository
+) : ViewModel() {
+    
+    // 所有单词
+    val allWords: StateFlow<List<Word>> = repository.getAllWords()
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    
+    // 按日期分组的批次
+    val batches: StateFlow<List<WordBatch>> = repository.getBatches()
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    
+    // 未勾选单词数量
+    val uncheckedCount: StateFlow<Int> = repository.getUncheckedCount()
+        .stateIn(viewModelScope, SharingStarted.Lazily, 0)
+    
+    // 总单词数量
+    val totalCount: StateFlow<Int> = repository.getTotalCount()
+        .stateIn(viewModelScope, SharingStarted.Lazily, 0)
+    
+    // 导入状态
+    private val _importState = MutableStateFlow<ImportState>(ImportState.Idle)
+    val importState: StateFlow<ImportState> = _importState.asStateFlow()
+    
+    // 当前批次的单词ID（固定5个，全部勾选完才刷新）
+    private val _currentBatchIds = MutableStateFlow<Set<Long>>(emptySet())
+    
+    // 当前页显示的单词（当前批次内的单词，未勾选在前，已勾选在后）
+    // 注意：只过滤和排序，不在combine内修改状态
+    val currentPageWords: StateFlow<List<Word>> = combine(
+        allWords,
+        _currentBatchIds
+    ) { words, batchIds ->
+        // 从所有单词中过滤出当前批次的单词
+        val batchWords = words.filter { it.id in batchIds }
+        
+        // 按勾选状态排序：未勾选在前，已勾选在后
+        // 同状态内按 displayOrder 排序
+        batchWords.sortedWith(compareBy({ it.isChecked }, { it.displayOrder }))
+    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    
+    // 当前页是否全部勾选完成
+    val isCurrentPageComplete: StateFlow<Boolean> = currentPageWords
+        .map { words -> words.isNotEmpty() && words.all { it.isChecked } }
+        .stateIn(viewModelScope, SharingStarted.Lazily, false)
+    
+    /**
+     * 获取指定日期范围内的单词
+     */
+    fun getWordsByDateRange(startTime: Long, endTime: Long): StateFlow<List<Word>> {
+        return repository.getWordsByDateRange(startTime, endTime)
+            .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    }
+    
+    /**
+     * 初始化当前批次（取前5个未勾选单词）
+     */
+    fun initCurrentBatch() {
+        viewModelScope.launch {
+            val uncheckedWords = repository.getUncheckedWordsOnce().take(5)
+            if (uncheckedWords.isNotEmpty()) {
+                _currentBatchIds.value = uncheckedWords.map { it.id }.toSet()
+            }
+        }
+    }
+    
+    /**
+     * 刷新到下一页（当当前页全部勾选后调用）
+     */
+    fun refreshToNextPage() {
+        viewModelScope.launch {
+            // 先将当前批次的单词标记为已完成（或保持勾选状态）
+            // 然后取新的5个未勾选单词
+            val uncheckedWords = repository.getUncheckedWordsOnce().take(5)
+            if (uncheckedWords.isNotEmpty()) {
+                _currentBatchIds.value = uncheckedWords.map { it.id }.toSet()
+            } else {
+                _currentBatchIds.value = emptySet()
+            }
+        }
+    }
+    
+    /**
+     * 导入单词（支持逗号或空格分隔）
+     * 例如: "word1, word2, word3" 或 "word1 word2 word3"
+     */
+    fun importWords(input: String) {
+        val words = input.split(Regex("[,\\s]+"))
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+        
+        if (words.isEmpty()) {
+            _importState.value = ImportState.Error("请输入有效的单词")
+            return
+        }
+        
+        viewModelScope.launch {
+            _importState.value = ImportState.Loading(words.size)
+            
+            val wordList = mutableListOf<Word>()
+            var successCount = 0
+            var skipCount = 0
+            
+            words.forEach { spelling ->
+                // 检查是否已存在
+                if (repository.isWordExists(spelling)) {
+                    skipCount++
+                    return@forEach
+                }
+                
+                // 尝试从词典API获取信息
+                val dictResult = DictionaryApi.lookup(spelling)
+                
+                wordList.add(
+                    Word(
+                        spelling = spelling,
+                        phonetic = dictResult?.phonetic ?: "",
+                        meaning = dictResult?.meaning ?: ""
+                    )
+                )
+                successCount++
+            }
+            
+            if (wordList.isNotEmpty()) {
+                repository.insertWords(wordList)
+            }
+            
+            _importState.value = ImportState.Success(
+                total = words.size,
+                imported = successCount,
+                skipped = skipCount
+            )
+        }
+    }
+    
+    /**
+     * 勾选单词（在本批次内移到末尾）
+     */
+    fun checkWord(word: Word) {
+        viewModelScope.launch {
+            // 更新勾选状态
+            repository.updateWord(word.copy(isChecked = true))
+            // 移到队尾（设置最大的 displayOrder）
+            repository.moveToEnd(word.id)
+        }
+    }
+    
+    /**
+     * 取消勾选
+     */
+    fun uncheckWord(word: Word) {
+        viewModelScope.launch {
+            repository.updateWord(word.copy(isChecked = false))
+        }
+    }
+    
+    /**
+     * 更新单词备注
+     */
+    fun updateNote(word: Word, note: String) {
+        viewModelScope.launch {
+            repository.updateWord(word.copy(note = note))
+        }
+    }
+    
+    /**
+     * 更新单词完整信息
+     */
+    fun updateWord(word: Word) {
+        viewModelScope.launch {
+            repository.updateWord(word)
+        }
+    }
+    
+    /**
+     * 删除单词
+     */
+    fun deleteWord(word: Word) {
+        viewModelScope.launch {
+            repository.deleteWord(word)
+            // 从当前批次中移除
+            _currentBatchIds.value = _currentBatchIds.value - word.id
+        }
+    }
+    
+    /**
+     * 重置导入状态
+     */
+    fun resetImportState() {
+        _importState.value = ImportState.Idle
+    }
+    
+    /**
+     * 重置所有勾选状态（用于重新开始复习）
+     */
+    fun resetAllChecked() {
+        viewModelScope.launch {
+            repository.resetAllChecked()
+            _currentBatchIds.value = emptySet()
+        }
+    }
+    
+    /**
+     * 清空所有单词
+     */
+    fun deleteAll() {
+        viewModelScope.launch {
+            repository.deleteAll()
+            _currentBatchIds.value = emptySet()
+        }
+    }
+}
+
+/**
+ * 导入状态
+ */
+sealed class ImportState {
+    object Idle : ImportState()
+    data class Loading(val count: Int) : ImportState()
+    data class Success(
+        val total: Int,
+        val imported: Int,
+        val skipped: Int
+    ) : ImportState()
+    data class Error(val message: String) : ImportState()
+}
