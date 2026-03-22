@@ -2,48 +2,67 @@ package com.worddraft.ui.screens
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.worddraft.data.model.Word
+import com.worddraft.data.model.TimeLevel
+import com.worddraft.data.model.WordBatch
+import com.worddraft.data.model.WordYear
+import com.worddraft.data.model.WordMonth
+import com.worddraft.data.model.WordWeek
 import com.worddraft.service.LockScreenAccessibilityService
 import com.worddraft.service.LockScreenService
-import com.worddraft.ui.components.WordCard
 import com.worddraft.ui.theme.Primary
 import com.worddraft.ui.theme.Secondary
 import com.worddraft.ui.theme.Success
 import com.worddraft.util.TtsManager
 import com.worddraft.viewmodel.ImportState
 import com.worddraft.viewmodel.MainViewModel
+import java.text.SimpleDateFormat
+import java.util.*
 
 /**
- * 主界面
+ * 主界面 - 层级目录管理（年 → 月 → 周 → 日）
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     viewModel: MainViewModel = viewModel(),
     onNavigateToLockScreen: () -> Unit = {},
-    onNavigateToWordList: () -> Unit = {}
+    onNavigateToWordList: () -> Unit = {},
+    onNavigateToBatch: (Long) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val currentPageWords by viewModel.currentPageWords.collectAsState()
+    val years by viewModel.years.collectAsState()
     val totalCount by viewModel.totalCount.collectAsState()
     val uncheckedCount by viewModel.uncheckedCount.collectAsState()
     val importState by viewModel.importState.collectAsState()
+    
+    // 当前导航层级状态（使用 rememberSaveable 持久化）
+    var currentLevel by rememberSaveable { mutableStateOf(TimeLevel.YEAR) }
+    var selectedYear by rememberSaveable { mutableStateOf<Int?>(null) }
+    var selectedMonth by rememberSaveable { mutableStateOf<Int?>(null) }
+    var selectedWeek by rememberSaveable { mutableStateOf<Int?>(null) }
     
     var showImportDialog by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
@@ -51,27 +70,21 @@ fun MainScreen(
     var lockScreenServiceEnabled by remember { mutableStateOf(LockScreenService.isServiceEnabled(context)) }
     var ttsAccentType by remember { mutableStateOf(TtsManager.getAccentType()) }
     
-    // 检查无障碍服务是否已启用
     var accessibilityEnabled by remember { mutableStateOf(false) }
     
-    // 初始化TTS
     LaunchedEffect(Unit) {
         TtsManager.init(context)
     }
     
-    // 每次界面恢复时检查无障碍权限状态
     DisposableEffect(Unit) {
         accessibilityEnabled = isAccessibilityServiceEnabled(context)
         onDispose { }
     }
     
-    // 权限对话框状态
-    var permissionDialogType by remember { mutableStateOf("") } // "", "overlay", "accessibility"
+    var permissionDialogType by remember { mutableStateOf("") }
     
-    // 切换锁屏服务的函数
     val toggleLockScreenService: () -> Unit = {
         if (lockScreenServiceEnabled) {
-            // 停止服务
             val intent = Intent(context, LockScreenService::class.java).apply {
                 action = LockScreenService.ACTION_STOP
             }
@@ -80,21 +93,14 @@ fun MainScreen(
             LockScreenService.setServiceEnabled(context, false)
             Toast.makeText(context, "锁屏服务已关闭", Toast.LENGTH_SHORT).show()
         } else {
-            // 实时检测权限状态
             val hasOverlay = hasOverlayPermission(context)
             val hasAccessibility = isAccessibilityServiceEnabled(context)
             
-            android.util.Log.d("MainScreen", "toggleLockScreenService: hasOverlay=$hasOverlay, hasAccessibility=$hasAccessibility")
-            
-            // 先检测悬浮窗权限（锁屏显示）
             if (!hasOverlay) {
-                // 缺少悬浮窗权限，显示应用权限引导
                 permissionDialogType = "overlay"
             } else if (!hasAccessibility) {
-                // 缺少无障碍权限，显示无障碍引导
                 permissionDialogType = "accessibility"
             } else {
-                // 已有所需权限，启动服务
                 val intent = Intent(context, LockScreenService::class.java).apply {
                     action = LockScreenService.ACTION_START
                 }
@@ -110,7 +116,6 @@ fun MainScreen(
         }
     }
     
-    // 打开无障碍设置
     val openAccessibilitySettings: () -> Unit = {
         try {
             val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
@@ -120,25 +125,93 @@ fun MainScreen(
         }
     }
     
+    // 获取当前层级的标题
+    val currentTitle = when (currentLevel) {
+        TimeLevel.YEAR -> "单词草稿本"
+        TimeLevel.MONTH -> "${selectedYear}年"
+        TimeLevel.WEEK -> "${selectedYear}年${selectedMonth}月"
+        TimeLevel.DAY -> "${selectedYear}年${selectedMonth}月 第${selectedWeek}周"
+    }
+    
+    // 返回上一层级
+    val navigateBack: () -> Unit = {
+        when (currentLevel) {
+            TimeLevel.YEAR -> { }
+            TimeLevel.MONTH -> {
+                currentLevel = TimeLevel.YEAR
+                selectedYear = null
+            }
+            TimeLevel.WEEK -> {
+                currentLevel = TimeLevel.MONTH
+                selectedMonth = null
+            }
+            TimeLevel.DAY -> {
+                currentLevel = TimeLevel.WEEK
+                selectedWeek = null
+            }
+        }
+    }
+    
+    // 处理系统返回键
+    BackHandler(enabled = currentLevel != TimeLevel.YEAR) {
+        navigateBack()
+    }
+    
+    // 获取"查看全部"按钮的时间范围
+    val onViewAllClick: () -> Unit = {
+        when (currentLevel) {
+            TimeLevel.YEAR -> onNavigateToWordList()
+            TimeLevel.MONTH -> {
+                selectedYear?.let { year ->
+                    val range = viewModel.getTimeRange(TimeLevel.YEAR, 
+                        Calendar.getInstance().apply { set(year, 0, 1) }.timeInMillis)
+                    // 导航到全部单词页面，传递时间范围
+                    onNavigateToWordList()
+                }
+            }
+            TimeLevel.WEEK -> {
+                selectedYear?.let { year ->
+                    selectedMonth?.let { month ->
+                        val range = viewModel.getTimeRange(TimeLevel.MONTH,
+                            Calendar.getInstance().apply { set(year, month - 1, 1) }.timeInMillis)
+                        onNavigateToWordList()
+                    }
+                }
+            }
+            TimeLevel.DAY -> {
+                // 查看该周所有单词
+                onNavigateToWordList()
+            }
+        }
+    }
+    
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { 
-                    Text("单词草稿本") 
+                    Text(currentTitle) 
+                },
+                navigationIcon = {
+                    if (currentLevel != TimeLevel.YEAR) {
+                        IconButton(onClick = navigateBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = "返回"
+                            )
+                        }
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                     titleContentColor = MaterialTheme.colorScheme.onBackground
                 ),
                 actions = {
-                    // 锁屏模式按钮
                     IconButton(onClick = onNavigateToLockScreen) {
                         Icon(
                             imageVector = Icons.Rounded.Lock,
                             contentDescription = "锁屏模式"
                         )
                     }
-                    // 更多菜单
                     Box {
                         IconButton(onClick = { showMenu = true }) {
                             Icon(
@@ -150,7 +223,6 @@ fun MainScreen(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false }
                         ) {
-                            // 锁屏服务开关
                             DropdownMenuItem(
                                 text = { 
                                     Row(
@@ -177,10 +249,9 @@ fun MainScreen(
                                     onNavigateToWordList()
                                 },
                                 leadingIcon = {
-                                    Icon(Icons.Rounded.List, null)
+                                    Icon(Icons.AutoMirrored.Rounded.List, null)
                                 }
                             )
-                            // TTS设置
                             DropdownMenuItem(
                                 text = { Text("发音设置") },
                                 onClick = {
@@ -270,67 +341,100 @@ fun MainScreen(
                 }
             }
             
-            // 当前页面单词列表
-            if (currentPageWords.isEmpty()) {
-                // 空状态
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.MenuBook,
-                            contentDescription = null,
-                            modifier = Modifier.size(80.dp),
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "还没有单词",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "点击右下角按钮添加单词",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                        )
-                    }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(vertical = 8.dp)
-                ) {
-                    items(
-                        items = currentPageWords,
-                        key = { it.id }
-                    ) { word ->
-                        WordCard(
-                            word = word,
-                            onSpeak = { TtsManager.speak(word.spelling) },
-                            onCheckChange = { isChecked ->
-                                if (isChecked) {
-                                    viewModel.checkWord(word)
-                                } else {
-                                    viewModel.uncheckWord(word)
-                                }
+            // 根据层级显示不同内容
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f)
+            ) {
+                when (currentLevel) {
+                    TimeLevel.YEAR -> YearLevelContent(
+                        years = years,
+                        onYearClick = { year ->
+                            selectedYear = year
+                            currentLevel = TimeLevel.MONTH
+                        },
+                        onViewAll = { year ->
+                            // 查看该年所有单词
+                            onNavigateToWordList()
+                        }
+                    )
+                    TimeLevel.MONTH -> selectedYear?.let { year ->
+                        MonthLevelContent(
+                            viewModel = viewModel,
+                            year = year,
+                            onMonthClick = { month ->
+                                selectedMonth = month
+                                currentLevel = TimeLevel.WEEK
                             },
-                            onNoteChange = { note ->
-                                viewModel.updateNote(word, note)
+                            onViewAll = { month ->
+                                // 查看该月所有单词
+                                onNavigateToWordList()
                             }
                         )
                     }
+                    TimeLevel.WEEK -> {
+                        selectedYear?.let { year ->
+                            selectedMonth?.let { month ->
+                                WeekLevelContent(
+                                    viewModel = viewModel,
+                                    year = year,
+                                    month = month,
+                                    onWeekClick = { week ->
+                                        selectedWeek = week
+                                        currentLevel = TimeLevel.DAY
+                                    },
+                                    onViewAll = { week ->
+                                        // 查看该周所有单词
+                                        onNavigateToWordList()
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    TimeLevel.DAY -> {
+                        selectedYear?.let { year ->
+                            selectedMonth?.let { month ->
+                                selectedWeek?.let { week ->
+                                    DayLevelContent(
+                                        viewModel = viewModel,
+                                        year = year,
+                                        month = month,
+                                        weekOfMonth = week,
+                                        onNavigateToBatch = onNavigateToBatch
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
+            
+            // 版本号
+            val versionName = remember {
+                try {
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName
+                } catch (e: PackageManager.NameNotFoundException) {
+                    "unknown"
+                }
+            }
+            val versionCode = remember {
+                try {
+                    @Suppress("DEPRECATION")
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionCode
+                } catch (e: PackageManager.NameNotFoundException) {
+                    0
+                }
+            }
+            Text(
+                text = "v$versionName",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                textAlign = TextAlign.Center
+            )
         }
     }
     
@@ -348,225 +452,38 @@ fun MainScreen(
         )
     }
     
-    // 悬浮窗权限引导对话框
+    // 权限对话框
     if (permissionDialogType == "overlay") {
-        // 刷新权限状态
         LaunchedEffect(permissionDialogType) {
             accessibilityEnabled = isAccessibilityServiceEnabled(context)
         }
-        
-        AlertDialog(
-            onDismissRequest = { permissionDialogType = "" },
-            icon = { 
-                Icon(
-                    imageVector = Icons.Rounded.Layers,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = Primary
-                )
+        PermissionOverlayDialog(
+            accessibilityEnabled = accessibilityEnabled,
+            onDismiss = { permissionDialogType = "" },
+            onConfirm = {
+                permissionDialogType = ""
+                openAppDetailsSettings(context)
             },
-            title = { 
-                Text("开启锁屏显示")
-            },
-            text = {
-                Column {
-                    Text(
-                        text = "锁屏功能需要在其他应用上层显示。",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    // 设置步骤说明
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp)
-                        ) {
-                            Text(
-                                text = "设置步骤：",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = Primary
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "1. 点击下方「去设置」按钮",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            Text(
-                                text = "2. 找到「单词草稿本」",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            Text(
-                                text = "3. 开启「锁屏显示」或「显示在其他应用上层」",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    // 无障碍权限状态提示
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (accessibilityEnabled) Icons.Rounded.CheckCircle else Icons.Rounded.Info,
-                            contentDescription = null,
-                            tint = if (accessibilityEnabled) Success else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = if (accessibilityEnabled) "无障碍权限已开启 ✓" else "设置完成后，还需开启无障碍权限",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { permissionDialogType = "" }) {
-                        Text("稍后再说")
-                    }
-                    Button(onClick = {
-                        permissionDialogType = ""
-                        openAppDetailsSettings(context)
-                    }) {
-                        Text("去设置")
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    // 用户确认已开启锁屏显示权限
-                    val prefs = context.getSharedPreferences("worddraft_prefs", Context.MODE_PRIVATE)
-                    prefs.edit().putBoolean("miui_lock_screen_granted", true).apply()
-                    permissionDialogType = ""
-                    Toast.makeText(context, "已记录锁屏显示权限，请继续开启无障碍服务", Toast.LENGTH_LONG).show()
-                }) {
-                    Text("已开启锁屏显示")
-                }
+            onGranted = {
+                val prefs = context.getSharedPreferences("worddraft_prefs", Context.MODE_PRIVATE)
+                prefs.edit().putBoolean("miui_lock_screen_granted", true).apply()
+                permissionDialogType = ""
+                Toast.makeText(context, "已记录锁屏显示权限，请继续开启无障碍服务", Toast.LENGTH_LONG).show()
             }
         )
     }
     
-    // 无障碍权限引导对话框
     if (permissionDialogType == "accessibility") {
-        AlertDialog(
-            onDismissRequest = { permissionDialogType = "" },
-            icon = { 
-                Icon(
-                    imageVector = Icons.Rounded.Accessibility,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = Primary
-                )
-            },
-            title = { 
-                Text("开启无障碍服务")
-            },
-            text = {
-                Column {
-                    Text(
-                        text = "锁屏功能需要无障碍服务来监听屏幕亮起事件。",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    // 设置步骤说明
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp)
-                        ) {
-                            Text(
-                                text = "设置步骤：",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = Primary
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "1. 点击下方「去设置」按钮",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            Text(
-                                text = "2. 找到「单词草稿本」",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            Text(
-                                text = "3. 开启开关并确认授权",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    // 已有权限提示
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.CheckCircle,
-                            contentDescription = null,
-                            tint = Success,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = "锁屏显示权限已开启 ✓",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    // 隐私说明
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Security,
-                            contentDescription = null,
-                            tint = Success,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = "本服务仅用于检测屏幕状态，不收集任何个人信息",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    permissionDialogType = ""
-                    openAccessibilitySettings()
-                }) {
-                    Text("去设置")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { permissionDialogType = "" }) {
-                    Text("稍后再说")
-                }
+        PermissionAccessibilityDialog(
+            onDismiss = { permissionDialogType = "" },
+            onConfirm = {
+                permissionDialogType = ""
+                openAccessibilitySettings()
             }
         )
     }
     
-    // TTS发音设置对话框
+    // TTS设置对话框
     if (showTtsSettingsDialog) {
         TtsSettingsDialog(
             showDialog = showTtsSettingsDialog,
@@ -577,20 +494,426 @@ fun MainScreen(
     }
 }
 
+// ============ 年级内容 ============
 @Composable
-fun StatItem(
-    label: String,
-    value: String,
-    color: androidx.compose.ui.graphics.Color
+fun YearLevelContent(
+    years: List<WordYear>,
+    onYearClick: (Int) -> Unit,
+    onViewAll: (Int) -> Unit = {}
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (years.isEmpty()) {
+            EmptyContent()
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(vertical = 8.dp)
+            ) {
+                items(items = years, key = { it.year }) { year ->
+                    YearCard(
+                        year = year, 
+                        onClick = { onYearClick(year.year) },
+                        onViewAll = { onViewAll(year.year) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun YearCard(year: WordYear, onClick: () -> Unit, onViewAll: () -> Unit = {}) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.headlineMedium,
-            color = color
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "${year.year}年",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "${year.totalCount} 个单词",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (year.uncheckedCount > 0) {
+                        Text(
+                            text = "${year.uncheckedCount} 个待复习",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Secondary
+                        )
+                    } else {
+                        Text(
+                            text = "已全部掌握",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Success
+                        )
+                    }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 查看全部按钮
+                IconButton(
+                    onClick = onViewAll,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.List,
+                        contentDescription = "查看全部单词",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                // 进入下一层级箭头
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                    contentDescription = "查看详情",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+// ============ 月级内容 ============
+@Composable
+fun MonthLevelContent(
+    viewModel: MainViewModel,
+    year: Int,
+    onMonthClick: (Int) -> Unit,
+    onViewAll: (Int) -> Unit = {}
+) {
+    val months by remember(year) { viewModel.getMonthsByYear(year) }.collectAsState()
+    
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (months.isEmpty()) {
+            EmptyContent()
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(vertical = 8.dp)
+            ) {
+                items(items = months, key = { "${it.year}-${it.month}" }) { month ->
+                    MonthCard(
+                        month = month, 
+                        onClick = { onMonthClick(month.month) },
+                        onViewAll = { onViewAll(month.month) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MonthCard(month: WordMonth, onClick: () -> Unit, onViewAll: () -> Unit = {}) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "${month.month}月",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "${month.totalCount} 个单词",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (month.uncheckedCount > 0) {
+                        Text(
+                            text = "${month.uncheckedCount} 个待复习",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Secondary
+                        )
+                    } else {
+                        Text(
+                            text = "已全部掌握",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Success
+                        )
+                    }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                IconButton(
+                    onClick = onViewAll,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.List,
+                        contentDescription = "查看全部单词",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                    contentDescription = "查看详情",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+// ============ 周级内容 ============
+@Composable
+fun WeekLevelContent(
+    viewModel: MainViewModel,
+    year: Int,
+    month: Int,
+    onWeekClick: (Int) -> Unit,
+    onViewAll: (Int) -> Unit = {}
+) {
+    val weeks by remember(year, month) { viewModel.getWeeksByMonth(year, month) }.collectAsState()
+    
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (weeks.isEmpty()) {
+            EmptyContent()
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(vertical = 8.dp)
+            ) {
+                items(items = weeks, key = { "${it.year}-${it.month}-${it.weekOfMonth}" }) { week ->
+                    WeekCard(
+                        week = week, 
+                        onClick = { onWeekClick(week.weekOfMonth) },
+                        onViewAll = { onViewAll(week.weekOfMonth) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun WeekCard(week: WordWeek, onClick: () -> Unit, onViewAll: () -> Unit = {}) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "第${week.weekOfMonth}周",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "${week.totalCount} 个单词",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (week.uncheckedCount > 0) {
+                        Text(
+                            text = "${week.uncheckedCount} 个待复习",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Secondary
+                        )
+                    } else {
+                        Text(
+                            text = "已全部掌握",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Success
+                        )
+                    }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                IconButton(
+                    onClick = onViewAll,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.List,
+                        contentDescription = "查看全部单词",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                    contentDescription = "查看详情",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+// ============ 日级内容 ============
+@Composable
+fun DayLevelContent(
+    viewModel: MainViewModel,
+    year: Int,
+    month: Int,
+    weekOfMonth: Int,
+    onNavigateToBatch: (Long) -> Unit
+) {
+    val days by remember(year, month, weekOfMonth) { viewModel.getBatchesByWeek(year, month, weekOfMonth) }.collectAsState()
+    
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (days.isEmpty()) {
+            EmptyContent()
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(vertical = 8.dp)
+            ) {
+                items(items = days, key = { it.date }) { batch ->
+                    BatchCard(
+                        batch = batch,
+                        onClick = { onNavigateToBatch(batch.timestamp) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun BatchCard(batch: WordBatch, onClick: () -> Unit) {
+    val dateText = remember(batch.timestamp) {
+        val today = Calendar.getInstance()
+        val calendar = Calendar.getInstance().apply { timeInMillis = batch.timestamp }
+        
+        val todayStart = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        
+        val batchDay = Calendar.getInstance().apply {
+            timeInMillis = batch.timestamp
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        
+        val diffDays = ((todayStart.timeInMillis - batchDay.timeInMillis) / (1000 * 60 * 60 * 24)).toInt()
+        
+        when (diffDays) {
+            0 -> "今天"
+            1 -> "昨天"
+            2 -> "前天"
+            else -> SimpleDateFormat("MM月dd日", Locale.getDefault()).format(Date(batch.timestamp))
+        }
+    }
+    
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(
+                    text = dateText,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "${batch.totalCount} 个单词",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (batch.uncheckedCount > 0) {
+                        Text(
+                            text = "${batch.uncheckedCount} 个待复习",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Secondary
+                        )
+                    } else {
+                        Text(
+                            text = "已全部掌握",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Success
+                        )
+                    }
+                }
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                contentDescription = "查看详情",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun EmptyContent() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = Icons.Rounded.MenuBook,
+                contentDescription = null,
+                modifier = Modifier.size(80.dp),
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "暂无数据",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            )
+        }
+    }
+}
+
+@Composable
+fun StatItem(label: String, value: String, color: androidx.compose.ui.graphics.Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text = value, style = MaterialTheme.typography.headlineMedium, color = color)
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
@@ -623,9 +946,7 @@ fun ImportDialog(
                             value = inputText,
                             onValueChange = { inputText = it },
                             placeholder = { Text("apple banana computer\n或 apple, banana, computer") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 120.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
                             maxLines = 5
                         )
                     }
@@ -642,11 +963,7 @@ fun ImportDialog(
                 }
                 is ImportState.Success -> {
                     Column {
-                        Text(
-                            text = "导入完成！",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Success
-                        )
+                        Text(text = "导入完成！", style = MaterialTheme.typography.titleMedium, color = Success)
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("总计: ${importState.total} 个")
                         Text("成功: ${importState.imported} 个")
@@ -656,40 +973,128 @@ fun ImportDialog(
                     }
                 }
                 is ImportState.Error -> {
-                    Text(
-                        text = importState.message,
-                        color = MaterialTheme.colorScheme.error
-                    )
+                    Text(text = importState.message, color = MaterialTheme.colorScheme.error)
                 }
             }
         },
         confirmButton = {
             when (importState) {
                 is ImportState.Idle -> {
-                    Button(
-                        onClick = { onImport(inputText) },
-                        enabled = inputText.isNotBlank()
-                    ) {
+                    Button(onClick = { onImport(inputText) }, enabled = inputText.isNotBlank()) {
                         Text("导入")
                     }
                 }
                 is ImportState.Success, is ImportState.Error -> {
-                    Button(onClick = onDismiss) {
-                        Text("确定")
-                    }
+                    Button(onClick = onDismiss) { Text("确定") }
                 }
                 else -> {}
             }
         },
         dismissButton = {
             if (importState is ImportState.Idle) {
-                TextButton(onClick = onDismiss) {
-                    Text("取消")
-                }
+                TextButton(onClick = onDismiss) { Text("取消") }
             }
         }
     )
 }
+
+@Composable
+fun PermissionOverlayDialog(
+    accessibilityEnabled: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    onGranted: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Rounded.Layers, null, Modifier.size(48.dp), Primary) },
+        title = { Text("开启锁屏显示") },
+        text = {
+            Column {
+                Text("锁屏功能需要在其他应用上层显示。", style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("设置步骤：", style = MaterialTheme.typography.titleSmall, color = Primary)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("1. 点击下方「去设置」按钮", style = MaterialTheme.typography.bodySmall)
+                        Text("2. 找到「单词草稿本」", style = MaterialTheme.typography.bodySmall)
+                        Text("3. 开启「锁屏显示」或「显示在其他应用上层」", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(
+                        imageVector = if (accessibilityEnabled) Icons.Rounded.CheckCircle else Icons.Rounded.Info,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = if (accessibilityEnabled) Success else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        if (accessibilityEnabled) "无障碍权限已开启 ✓" else "设置完成后，还需开启无障碍权限",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onDismiss) { Text("稍后再说") }
+                Button(onClick = onConfirm) { Text("去设置") }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onGranted) { Text("已开启锁屏显示") }
+        }
+    )
+}
+
+@Composable
+fun PermissionAccessibilityDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Rounded.Accessibility, null, Modifier.size(48.dp), Primary) },
+        title = { Text("开启无障碍服务") },
+        text = {
+            Column {
+                Text("锁屏功能需要无障碍服务来监听屏幕亮起事件。", style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("设置步骤：", style = MaterialTheme.typography.titleSmall, color = Primary)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("1. 点击下方「去设置」按钮", style = MaterialTheme.typography.bodySmall)
+                        Text("2. 找到「单词草稿本」", style = MaterialTheme.typography.bodySmall)
+                        Text("3. 开启开关并确认授权", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(
+                        imageVector = Icons.Rounded.Security,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = Success
+                    )
+                    Text("本服务仅用于检测屏幕状态，不收集任何个人信息", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        },
+        confirmButton = { Button(onClick = onConfirm) { Text("去设置") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("稍后再说") } }
+    )
+}
+
 @Composable
 fun TtsSettingsDialog(
     showDialog: Boolean,
@@ -703,30 +1108,19 @@ fun TtsSettingsDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = { 
-            Icon(
-                imageVector = Icons.Rounded.RecordVoiceOver,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = Primary
-            )
-        },
+        icon = { Icon(Icons.Rounded.RecordVoiceOver, null, Modifier.size(48.dp), Primary) },
         title = { Text("发音设置") },
         text = {
             Column {
-                Text(
-                    text = "选择单词发音类型：",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Text("选择单词发音类型：", style = MaterialTheme.typography.bodyMedium)
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                // 美音选项
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (currentAccentType == TtsManager.TYPE_AMERICAN) 
-                            MaterialTheme.colorScheme.primaryContainer 
-                        else 
+                        containerColor = if (currentAccentType == TtsManager.TYPE_AMERICAN)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else
                             MaterialTheme.colorScheme.surfaceVariant
                     ),
                     onClick = {
@@ -736,9 +1130,7 @@ fun TtsSettingsDialog(
                     }
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
@@ -747,28 +1139,20 @@ fun TtsSettingsDialog(
                             onClick = null
                         )
                         Column {
-                            Text(
-                                text = "美式发音",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "American English",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Text("美式发音", style = MaterialTheme.typography.titleSmall)
+                            Text("American English", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
                 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 
-                // 英音选项
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (currentAccentType == TtsManager.TYPE_BRITISH) 
-                            MaterialTheme.colorScheme.primaryContainer 
-                        else 
+                        containerColor = if (currentAccentType == TtsManager.TYPE_BRITISH)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else
                             MaterialTheme.colorScheme.surfaceVariant
                     ),
                     onClick = {
@@ -778,9 +1162,7 @@ fun TtsSettingsDialog(
                     }
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
@@ -789,33 +1171,14 @@ fun TtsSettingsDialog(
                             onClick = null
                         )
                         Column {
-                            Text(
-                                text = "英式发音",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "British English",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Text("英式发音", style = MaterialTheme.typography.titleSmall)
+                            Text("British English", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                Text(
-                    text = "点击选项可试听发音效果",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("确定")
-            }
-        }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("完成") } }
     )
 }
 
@@ -823,106 +1186,68 @@ fun TtsSettingsDialog(
  * 检查无障碍服务是否已启用
  */
 fun isAccessibilityServiceEnabled(context: Context): Boolean {
-    android.util.Log.d("MainScreen", "=== isAccessibilityServiceEnabled START ===")
-    
     // 方法1：检查服务实例是否存在（服务运行时）
     val instanceExists = LockScreenAccessibilityService.isServiceEnabled()
-    android.util.Log.d("MainScreen", "Instance exists: $instanceExists")
     if (instanceExists) {
-        android.util.Log.d("MainScreen", "Accessibility service instance exists, returning true")
         return true
     }
     
     // 方法2：检查系统设置中是否启用了无障碍服务
     return try {
-        val serviceName = LockScreenAccessibilityService::class.java.canonicalName ?: run {
-            android.util.Log.e("MainScreen", "Service canonicalName is null!")
-            return false
-        }
+        val serviceName = LockScreenAccessibilityService::class.java.canonicalName ?: return false
         val packageName = context.packageName
-        
-        android.util.Log.d("MainScreen", "Service name: $serviceName")
-        android.util.Log.d("MainScreen", "Package name: $packageName")
         
         val enabledServices = Settings.Secure.getString(
             context.contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
         )
         
-        android.util.Log.d("MainScreen", "Enabled services raw: $enabledServices")
-        
         if (enabledServices.isNullOrEmpty()) {
-            android.util.Log.d("MainScreen", "Enabled services is null or empty, returning false")
             return false
         }
         
         // 多种可能的格式
         val possibleFormats = listOf(
-            "$packageName/$serviceName",  // 标准：com.worddraft/com.worddraft.service.LockScreenAccessibilityService
-            serviceName,                   // 仅类名
-            "$packageName:$serviceName",   // MIUI可能的格式
-            serviceName.substringAfterLast(".") // 仅简单类名
+            "$packageName/$serviceName",
+            serviceName,
+            "$packageName:$serviceName",
+            serviceName.substringAfterLast(".")
         )
         
-        android.util.Log.d("MainScreen", "Possible formats to check:")
-        possibleFormats.forEachIndexed { index, format ->
-            android.util.Log.d("MainScreen", "  [$index] $format")
-        }
-        
-        // 检查是否包含任何格式的匹配
         var found = false
         enabledServices.split(":").forEach { serviceEntry ->
-            android.util.Log.d("MainScreen", "Checking service entry: '$serviceEntry'")
             possibleFormats.forEach { format ->
-                val match = serviceEntry.contains(format, ignoreCase = true) || 
-                            format.contains(serviceEntry, ignoreCase = true)
-                android.util.Log.d("MainScreen", "  Format '$format' vs entry '$serviceEntry': $match")
-                if (match) found = true
+                if (serviceEntry.contains(format, ignoreCase = true) || 
+                    format.contains(serviceEntry, ignoreCase = true)) {
+                    found = true
+                }
             }
         }
         
-        // 也检查整个字符串
         possibleFormats.forEach { format ->
             if (enabledServices.contains(format, ignoreCase = true)) {
-                android.util.Log.d("MainScreen", "Direct contains match for: $format")
                 found = true
             }
         }
         
-        android.util.Log.d("MainScreen", "=== Final result: $found ===")
         found
     } catch (e: Exception) {
-        android.util.Log.e("MainScreen", "Failed to check accessibility: ${e.message}")
-        e.printStackTrace()
         false
     }
 }
 
 /**
- * 检查悬浮窗权限（锁屏显示需要）
- * MIUI系统有两个权限：锁屏显示 + 显示悬浮窗
+ * 检查悬浮窗权限
  */
 fun hasOverlayPermission(context: Context): Boolean {
-    android.util.Log.d("MainScreen", "=== hasOverlayPermission START ===")
-    android.util.Log.d("MainScreen", "SDK_INT: ${Build.VERSION.SDK_INT}, M: ${Build.VERSION_CODES.M}")
-    
-    // 标准悬浮窗权限检查
     val hasStandardOverlay = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        val result = Settings.canDrawOverlays(context)
-        android.util.Log.d("MainScreen", "Settings.canDrawOverlays() = $result")
-        result
+        Settings.canDrawOverlays(context)
     } else {
         true
     }
     
-    // MIUI特有：检查锁屏显示权限
     val hasMiuiLockScreen = checkMiuiLockScreenPermission(context)
-    android.util.Log.d("MainScreen", "MIUI锁屏显示权限 = $hasMiuiLockScreen")
-    
-    // 需要两个权限都有
-    val finalResult = hasStandardOverlay && hasMiuiLockScreen
-    android.util.Log.d("MainScreen", "=== hasOverlayPermission FINAL: $finalResult ===")
-    return finalResult
+    return hasStandardOverlay && hasMiuiLockScreen
 }
 
 /**
@@ -930,26 +1255,13 @@ fun hasOverlayPermission(context: Context): Boolean {
  */
 private fun checkMiuiLockScreenPermission(context: Context): Boolean {
     return try {
-        // 检查是否是MIUI
         val isMiui = isMiuiDevice()
-        android.util.Log.d("MainScreen", "Is MIUI: $isMiui")
-        
         if (!isMiui) {
-            // 非MIUI系统，不需要检查锁屏显示权限
-            android.util.Log.d("MainScreen", "Non-MIUI device, lock screen permission not required")
             return true
         }
-        
-        // MIUI系统：检查锁屏显示权限
-        // 由于MIUI没有公开API检测此权限，我们使用SharedPreferences记录用户是否已授权
         val prefs = context.getSharedPreferences("worddraft_prefs", Context.MODE_PRIVATE)
-        val hasGranted = prefs.getBoolean("miui_lock_screen_granted", false)
-        android.util.Log.d("MainScreen", "MIUI lock screen granted from prefs: $hasGranted")
-        hasGranted
+        prefs.getBoolean("miui_lock_screen_granted", false)
     } catch (e: Exception) {
-        android.util.Log.e("MainScreen", "checkMiuiLockScreenPermission error: ${e.message}")
-        e.printStackTrace()
-        // 出错时默认返回true，让标准检测继续
         true
     }
 }
@@ -964,7 +1276,6 @@ private fun isMiuiDevice(): Boolean {
         val miuiVersion = method.invoke(null, "ro.miui.ui.version.name", "") as String
         miuiVersion.isNotEmpty()
     } catch (e: Exception) {
-        android.util.Log.e("MainScreen", "isMiuiDevice check failed: ${e.message}")
         false
     }
 }
@@ -980,28 +1291,11 @@ fun openAppDetailsSettings(context: Context) {
         }
         context.startActivity(intent)
     } catch (e: Exception) {
-        android.util.Log.e("MainScreen", "Failed to open app details: ${e.message}")
-        // 如果失败，尝试打开应用设置
         try {
             val intent = Intent(Settings.ACTION_APPLICATION_SETTINGS)
             context.startActivity(intent)
         } catch (e2: Exception) {
             Toast.makeText(context, "无法打开设置页面", Toast.LENGTH_SHORT).show()
         }
-    }
-}
-
-/**
- * 打开悬浮窗设置页
- */
-fun openOverlaySettings(context: Context) {
-    try {
-        val intent = Intent(
-            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            android.net.Uri.parse("package:${context.packageName}")
-        )
-        context.startActivity(intent)
-    } catch (e: Exception) {
-        openAppDetailsSettings(context)
     }
 }

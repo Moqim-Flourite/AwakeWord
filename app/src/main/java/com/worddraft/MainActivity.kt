@@ -22,10 +22,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.worddraft.ui.screens.LockScreen
+import androidx.navigation.navArgument
+import com.worddraft.ui.screens.BatchDetailScreen
 import com.worddraft.ui.screens.MainScreen
 import com.worddraft.ui.screens.WordListScreen
 import com.worddraft.ui.theme.WordDraftTheme
@@ -87,29 +89,9 @@ class MainActivity : ComponentActivity() {
                             },
                             onNavigateToWordList = {
                                 navController.navigate("list")
-                            }
-                        )
-                    }
-                    
-                    composable(
-                        route = "lock",
-                        enterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                animationSpec = tween(300)
-                            )
-                        },
-                        exitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                animationSpec = tween(300)
-                            )
-                        }
-                    ) {
-                        LockScreen(
-                            viewModel = viewModel,
-                            onClose = {
-                                navController.popBackStack()
+                            },
+                            onNavigateToBatch = { timestamp ->
+                                navController.navigate("batch/$timestamp")
                             }
                         )
                     }
@@ -131,6 +113,34 @@ class MainActivity : ComponentActivity() {
                     ) {
                         WordListScreen(
                             viewModel = viewModel,
+                            onBack = {
+                                navController.popBackStack()
+                            }
+                        )
+                    }
+                    
+                    composable(
+                        route = "batch/{timestamp}",
+                        arguments = listOf(
+                            navArgument("timestamp") { type = NavType.LongType }
+                        ),
+                        enterTransition = {
+                            slideIntoContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Left,
+                                animationSpec = tween(300)
+                            )
+                        },
+                        exitTransition = {
+                            slideOutOfContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Right,
+                                animationSpec = tween(300)
+                            )
+                        }
+                    ) { backStackEntry ->
+                        val timestamp = backStackEntry.arguments?.getLong("timestamp") ?: 0L
+                        BatchDetailScreen(
+                            viewModel = viewModel,
+                            dateTimestamp = timestamp,
                             onBack = {
                                 navController.popBackStack()
                             }

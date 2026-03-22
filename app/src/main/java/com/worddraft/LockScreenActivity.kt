@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.worddraft.ui.components.DisplayMode
 import com.worddraft.ui.components.WordCardCompact
 import com.worddraft.ui.theme.*
 import com.worddraft.util.TtsManager
@@ -128,6 +129,9 @@ private fun LockScreenContent(
     val uncheckedCount by viewModel.uncheckedCount.collectAsState()
     val isCurrentPageComplete by viewModel.isCurrentPageComplete.collectAsState()
     
+    // 每个单词的显示模式状态
+    val displayModes = remember { mutableStateMapOf<Long, DisplayMode>() }
+    
     // 初始化TTS
     val context = LocalContext.current
     LaunchedEffect(Unit) {
@@ -155,39 +159,21 @@ private fun LockScreenContent(
                 )
             )
     ) {
-        // 顶部：标题和关闭按钮
-        Row(
+        // 顶部：关闭按钮
+        IconButton(
+            onClick = onClose,
             modifier = Modifier
-                .fillMaxWidth()
+                .align(Alignment.TopEnd)
                 .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(16.dp)
+                .size(48.dp)
         ) {
-            Column {
-                Text(
-                    text = "单词草稿本",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White
-                )
-                Text(
-                    text = "待复习: $uncheckedCount 个单词",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
-                )
-            }
-            
-            IconButton(
-                onClick = onClose,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Close,
-                    contentDescription = "关闭",
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
+            Icon(
+                imageVector = Icons.Rounded.Close,
+                contentDescription = "关闭",
+                tint = Color.White,
+                modifier = Modifier.size(28.dp)
+            )
         }
         
         // 中间：单词卡片列表
@@ -218,16 +204,15 @@ private fun LockScreenContent(
                 }
             }
         } else {
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = 100.dp, bottom = 80.dp, start = 16.dp, end = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .statusBarsPadding()
+                    .padding(top = 60.dp, bottom = 80.dp, start = 16.dp, end = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
             ) {
-                items(
-                    items = currentPageWords,
-                    key = { it.id }
-                ) { word ->
+                currentPageWords.forEach { word ->
+                    val displayMode = displayModes[word.id] ?: DisplayMode.BOTH
                     WordCardCompact(
                         word = word,
                         onSpeak = { TtsManager.speak(word.spelling) },
@@ -237,7 +222,12 @@ private fun LockScreenContent(
                             } else {
                                 viewModel.uncheckWord(word)
                             }
-                        }
+                        },
+                        displayMode = displayMode,
+                        onDisplayModeChange = { newMode ->
+                            displayModes[word.id] = newMode
+                        },
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
