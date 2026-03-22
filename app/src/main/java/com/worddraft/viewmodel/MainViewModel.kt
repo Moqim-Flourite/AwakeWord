@@ -83,10 +83,11 @@ class MainViewModel(
     }
     
     /**
-     * 导入单词（英文逗号分隔）
+     * 导入单词（支持逗号或空格分隔）
+     * 例如: "word1, word2, word3" 或 "word1 word2 word3"
      */
     fun importWords(input: String) {
-        val words = input.split(",")
+        val words = input.split(Regex("[,\\s]+"))
             .map { it.trim() }
             .filter { it.isNotBlank() }
         

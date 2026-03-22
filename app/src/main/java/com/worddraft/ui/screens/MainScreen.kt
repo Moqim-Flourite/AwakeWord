@@ -615,14 +615,14 @@ fun ImportDialog(
                 is ImportState.Idle -> {
                     Column {
                         Text(
-                            text = "请输入单词，用英文逗号分隔",
+                            text = "请输入单词，支持逗号或空格分隔",
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                         OutlinedTextField(
                             value = inputText,
                             onValueChange = { inputText = it },
-                            placeholder = { Text("apple, banana, computer") },
+                            placeholder = { Text("apple banana computer\n或 apple, banana, computer") },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 120.dp),
