@@ -1,0 +1,199 @@
+# AwakeWord（醒词）☀️
+
+**背单词辅助工具** - 专为那些"怎么也记不住"的单词设计。
+
+在其他背单词软件遇到总是记不住的词？导入到这里，利用碎片时间反复强化记忆。每次亮屏就能看到，无需解锁手机 👀
+
+## 💡 使用场景
+
+1. 在其他背单词App遇到难记的单词
+2. 把这些"钉子户"导入到醒词
+3. 每次拿起手机，锁屏界面自动显示单词卡片
+4. 利用碎片时间反复强化，直到记住
+
+## ✨ 功能特点
+
+### 核心功能
+- **📝 单词导入** - 支持英文逗号或空格分隔批量导入，自动查询有道词典获取音标和中文释义
+- **📁 层级目录** - 按年/月/周/日层级管理单词，方便查看学习进度
+- **🔒 锁屏亮屏自动弹出** - 屏幕亮起时自动显示单词卡片，随时随地复习
+- **🔄 显示模式切换** - 锁屏界面可切换显示释义、备注或两者都显示
+- **🔊 TTS发音** - 点击播放单词发音，支持美式/英式口音切换
+- **✅ 勾选排序** - 记住的单词自动移到队尾，全勾选后刷新新页面
+- **📝 备注功能** - 随时添加个人记忆技巧
+- **♿ 无障碍服务** - 使用无障碍服务监听亮屏事件，MIUI友好
+
+### 界面设计
+- **主题切换** - 支持跟随系统、白天模式、黑夜模式三种主题
+- **深色主题** - 护眼紫色系配色，适合夜间学习
+- **浅色主题** - 清爽白色背景，适合白天使用
+- **Material Design 3** - 现代化 UI 设计
+- **流畅动画** - 滑动页面切换效果
+
+## 🔧 权限要求
+
+### 锁屏功能需要
+1. **锁屏显示** - 在其他应用上层显示（MIUI特有）
+2. **显示悬浮窗** - 标准Android悬浮窗权限
+3. **无障碍服务** - 监听屏幕亮起事件
+
+### MIUI设备注意事项
+- 需要手动开启"锁屏显示"权限
+- 需要开启无障碍服务
+- 在设置中搜索"AwakeWord"可快速找到应用
+
+## 🏗️ 项目结构
+
+```
+app/src/main/java/com/worddraft/
+├── data/
+│   ├── local/           # Room 数据库
+│   │   ├── WordDao.kt
+│   │   └── WordDatabase.kt
+│   ├── model/           # 数据模型
+│   │   └── Word.kt
+│   └── repository/      # 数据仓库
+│       └── WordRepository.kt
+├── service/             # 后台服务
+│   ├── LockScreenService.kt
+│   ├── LockScreenAccessibilityService.kt
+│   ├── LockScreenReceiver.kt
+│   └── GuardService.kt
+├── ui/
+│   ├── components/      # 通用组件
+│   │   └── WordCard.kt
+│   ├── screens/         # 页面
+│   │   ├── MainScreen.kt
+│   │   ├── WordListScreen.kt
+│   │   └── BatchDetailScreen.kt
+│   └── theme/           # 主题样式
+│       ├── Color.kt
+│       ├── Theme.kt
+│       └── Type.kt
+├── util/                # 工具类
+│   ├── DictionaryApi.kt
+│   └── TtsManager.kt
+├── viewmodel/           # ViewModel
+│   ├── MainViewModel.kt
+│   └── MainViewModelFactory.kt
+├── MainActivity.kt
+├── LockScreenActivity.kt
+└── WordDraftApplication.kt
+```
+
+## 🛠️ 技术栈
+
+- **Kotlin** - 100% Kotlin 编写
+- **Jetpack Compose** - 声明式 UI
+- **Room Database** - 本地数据存储
+- **Material Design 3** - UI 组件库
+- **Navigation Compose** - 页面导航
+- **ViewModel & Flow** - 响应式架构
+- **Accessibility Service** - 无障碍服务监听亮屏
+
+## 🚀 快速开始
+
+### 环境要求
+- JDK 17+
+- Android SDK (API 24+)
+- Gradle (已包含 Wrapper)
+
+### 构建项目
+
+```bash
+# Linux/Mac
+./gradlew assembleDebug
+
+# Windows
+gradlew.bat assembleDebug
+```
+
+### 安装到设备
+
+```bash
+./gradlew installDebug
+```
+
+## 📱 使用说明
+
+1. **导入单词** - 点击右下角 ➕ 按钮，输入单词（英文逗号或空格分隔）
+2. **层级浏览** - 点击年/月/周进入对应层级，查看不同时间段的单词
+3. **开启锁屏服务** - 点击右上角 ⋮ 菜单 → 开启锁屏服务
+4. **授予权限** - 按提示开启锁屏显示、悬浮窗、无障碍权限
+5. **亮屏复习** - 每次亮屏自动弹出单词卡片
+6. **切换显示** - 锁屏界面点击切换按钮，切换显示释义、备注或两者
+7. **勾选单词** - 记住的单词点击勾选，自动移到队尾
+8. **添加备注** - 点击单词卡片添加个人记忆技巧
+9. **播放发音** - 点击 🔊 图标播放单词发音
+
+## 📦 生成的APK位置
+
+```
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+## 🎨 自定义
+
+### 修改主题颜色
+编辑 `ui/theme/Color.kt`：
+```kotlin
+val Primary = Color(0xFF6B4CE0)        // 紫色主色
+val Secondary = Color(0xFFFF9800)      // 橙色强调色
+```
+
+### 修改每页显示数量
+编辑 `data/local/WordDao.kt`：
+```kotlin
+@Query("SELECT * FROM words WHERE isChecked = 0 ORDER BY displayOrder ASC, createdAt DESC LIMIT 5")
+// 修改 LIMIT 后面的数字
+```
+
+## 📝 注意事项
+
+- 锁屏功能需要悬浮窗权限和无障碍服务
+- MIUI设备需额外开启"锁屏显示"权限
+- 词典查询需要网络权限
+- TTS 发音需要系统支持英语语音
+
+## 🌐 相关资源
+
+- [Jetpack Compose 官方文档](https://developer.android.com/jetpack/compose)
+- [Material Design 3](https://m3.material.io/)
+- [Room 数据库](https://developer.android.com/training/data-storage/room)
+
+## 📜 版本历史
+
+### v1.0.2 (2026-03-22)
+**新增功能**
+- 📁 层级目录管理 - 按年/月/周/日层级查看单词，方便复习
+- 🔄 锁屏显示模式切换 - 支持仅释义/仅备注/两者都显示三种模式
+- 📜 锁屏卡片滚动显示 - 单词信息可滚动查看，完整显示所有内容
+
+**问题修复**
+- 🐛 修复锁屏界面切换按钮无响应问题
+- 🧹 清理冗余代码，删除未使用的LockScreen.kt
+
+### v1.0.1 (2026-03-22)
+**新增功能**
+- ✨ 支持空格分隔导入单词（兼容逗号分隔）
+- ✨ 每页单词数量从8个调整为5个
+
+### v1.0.0 (2026-03-20)
+🎉 首次发布
+- 📝 单词导入与管理（逗号分隔）
+- 🔒 锁屏亮屏自动弹出单词卡片
+- 🔊 TTS发音（美式/英式）
+- ✅ 勾选排序功能
+- 📝 备注功能
+- ♿ 无障碍服务支持
+- 🎨 深色主题UI
+
+---
+
+## 📄 开源协议
+
+本项目基于 [MIT License](LICENSE) 开源。
+
+---
+
+Happy Learning! 🎓✨

@@ -50,6 +50,9 @@ MERGED from [androidx.customview:customview-poolingcontainer:1.0.0] /root/.gradl
 MERGED from [androidx.core:core-ktx:1.15.0] /root/.gradle/caches/9.1.0/transforms/843fce0ec39554deb8d276e74702d08f/transformed/core-ktx-1.15.0/AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.room:room-runtime:2.6.1] /root/.gradle/caches/9.1.0/transforms/9d379ca87af67901cb733666357c6c87/transformed/room-runtime-2.6.1/AndroidManifest.xml:17:1-31:12
 MERGED from [androidx.room:room-ktx:2.6.1] /root/.gradle/caches/9.1.0/transforms/2ed3f08b89933ec1910bafa1ccdaf8f7/transformed/room-ktx-2.6.1/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.datastore:datastore-core-android:1.1.1] /root/.gradle/caches/9.1.0/transforms/b73d2dbcd1acae7937795fcb56da3a98/transformed/datastore-core-release/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.datastore:datastore-android:1.1.1] /root/.gradle/caches/9.1.0/transforms/c7bee5a46886150cfce06ae27bf45835/transformed/datastore-release/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.datastore:datastore-preferences-android:1.1.1] /root/.gradle/caches/9.1.0/transforms/14f9042542dc4c038d353be5e345611e/transformed/datastore-preferences-release/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.compose.runtime:runtime-saveable-android:1.7.6] /root/.gradle/caches/9.1.0/transforms/f6e0b4b5177337819c8c14ba2e27d1a6/transformed/runtime-saveable-release/AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.compose.runtime:runtime-android:1.7.6] /root/.gradle/caches/9.1.0/transforms/e516689a3b50e65064f23b5ebf35f5d6/transformed/runtime-release/AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.sqlite:sqlite-framework:2.4.0] /root/.gradle/caches/9.1.0/transforms/7ddc3e72dc74b69f4209b9b88f348bd4/transformed/sqlite-framework-2.4.0/AndroidManifest.xml:17:1-22:12
@@ -356,6 +359,12 @@ MERGED from [androidx.room:room-runtime:2.6.1] /root/.gradle/caches/9.1.0/transf
 MERGED from [androidx.room:room-runtime:2.6.1] /root/.gradle/caches/9.1.0/transforms/9d379ca87af67901cb733666357c6c87/transformed/room-runtime-2.6.1/AndroidManifest.xml:21:5-44
 MERGED from [androidx.room:room-ktx:2.6.1] /root/.gradle/caches/9.1.0/transforms/2ed3f08b89933ec1910bafa1ccdaf8f7/transformed/room-ktx-2.6.1/AndroidManifest.xml:20:5-44
 MERGED from [androidx.room:room-ktx:2.6.1] /root/.gradle/caches/9.1.0/transforms/2ed3f08b89933ec1910bafa1ccdaf8f7/transformed/room-ktx-2.6.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.datastore:datastore-core-android:1.1.1] /root/.gradle/caches/9.1.0/transforms/b73d2dbcd1acae7937795fcb56da3a98/transformed/datastore-core-release/AndroidManifest.xml:5:5-44
+MERGED from [androidx.datastore:datastore-core-android:1.1.1] /root/.gradle/caches/9.1.0/transforms/b73d2dbcd1acae7937795fcb56da3a98/transformed/datastore-core-release/AndroidManifest.xml:5:5-44
+MERGED from [androidx.datastore:datastore-android:1.1.1] /root/.gradle/caches/9.1.0/transforms/c7bee5a46886150cfce06ae27bf45835/transformed/datastore-release/AndroidManifest.xml:20:5-44
+MERGED from [androidx.datastore:datastore-android:1.1.1] /root/.gradle/caches/9.1.0/transforms/c7bee5a46886150cfce06ae27bf45835/transformed/datastore-release/AndroidManifest.xml:20:5-44
+MERGED from [androidx.datastore:datastore-preferences-android:1.1.1] /root/.gradle/caches/9.1.0/transforms/14f9042542dc4c038d353be5e345611e/transformed/datastore-preferences-release/AndroidManifest.xml:20:5-44
+MERGED from [androidx.datastore:datastore-preferences-android:1.1.1] /root/.gradle/caches/9.1.0/transforms/14f9042542dc4c038d353be5e345611e/transformed/datastore-preferences-release/AndroidManifest.xml:20:5-44
 MERGED from [androidx.compose.runtime:runtime-saveable-android:1.7.6] /root/.gradle/caches/9.1.0/transforms/f6e0b4b5177337819c8c14ba2e27d1a6/transformed/runtime-saveable-release/AndroidManifest.xml:5:5-44
 MERGED from [androidx.compose.runtime:runtime-saveable-android:1.7.6] /root/.gradle/caches/9.1.0/transforms/f6e0b4b5177337819c8c14ba2e27d1a6/transformed/runtime-saveable-release/AndroidManifest.xml:5:5-44
 MERGED from [androidx.compose.runtime:runtime-android:1.7.6] /root/.gradle/caches/9.1.0/transforms/e516689a3b50e65064f23b5ebf35f5d6/transformed/runtime-release/AndroidManifest.xml:5:5-44
