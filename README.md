@@ -188,4 +188,10 @@ val Secondary = Color(0xFFFF9800)      // 橙色强调色
 
 ---
 
+## 📄 开源协议
+
+本项目基于 [MIT License](LICENSE) 开源。
+
+---
+
 Happy Learning! 🎓✨
