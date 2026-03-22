@@ -51,8 +51,8 @@ app/src/main/java/com/worddraft/
 │   │   └── WordCard.kt
 │   ├── screens/         # 页面
 │   │   ├── MainScreen.kt
-│   │   ├── LockScreen.kt
-│   │   └── WordListScreen.kt
+│   │   ├── WordListScreen.kt
+│   │   └── BatchDetailScreen.kt
 │   └── theme/           # 主题样式
 │       ├── Color.kt
 │       ├── Theme.kt
@@ -129,7 +129,7 @@ val Secondary = Color(0xFFFF9800)      // 橙色强调色
 ### 修改每页显示数量
 编辑 `data/local/WordDao.kt`：
 ```kotlin
-@Query("SELECT * FROM words WHERE isChecked = 0 ORDER BY displayOrder ASC, createdAt DESC LIMIT 8")
+@Query("SELECT * FROM words WHERE isChecked = 0 ORDER BY displayOrder ASC, createdAt DESC LIMIT 5")
 // 修改 LIMIT 后面的数字
 ```
 
@@ -147,6 +147,21 @@ val Secondary = Color(0xFFFF9800)      // 橙色强调色
 - [Room 数据库](https://developer.android.com/training/data-storage/room)
 
 ## 📜 版本历史
+
+### v1.0.3
+- 🐛 修复锁屏界面切换按钮无响应问题
+- 🧹 清理冗余代码，删除未使用的LockScreen.kt
+- ✨ 版本号显示简化为v1.0.3格式
+
+### v1.0.2
+- 🐛 修复返回按钮层级导航问题
+- 🐛 修复页面快闪问题
+- ✨ 添加导航状态持久化
+
+### v1.0.1
+- 🐛 修复层级目录功能编译错误
+- ✨ 每页单词数量从8个改为5个
+- ✨ 支持空格分隔导入单词
 
 ### v1.0.0
 - ✨ 首次发布
