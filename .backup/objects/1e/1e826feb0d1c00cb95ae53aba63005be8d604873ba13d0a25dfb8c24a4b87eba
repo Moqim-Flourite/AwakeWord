@@ -1,4 +1,0 @@
-<resources>
-    <string name="app_name">单词草稿本</string>
-    <string name="accessibility_service_description">单词草稿本需要无障碍服务来监听屏幕亮起事件，以便在锁屏界面显示单词卡片。本服务不会收集任何个人信息，仅用于检测屏幕状态。</string>
-</resources>
