@@ -26,10 +26,10 @@ interface WordDao {
     fun getAllWords(): Flow<List<Word>>
     
     /**
-     * 获取当前显示页面的单词（最多8个，按原始顺序）
+     * 获取当前显示页面的单词（最多5个，按原始顺序）
      * 只获取未勾选的单词，勾选后单词从当前页移除
      */
-    @Query("SELECT * FROM words WHERE isChecked = 0 ORDER BY displayOrder ASC, createdAt ASC LIMIT 8")
+    @Query("SELECT * FROM words WHERE isChecked = 0 ORDER BY displayOrder ASC, createdAt ASC LIMIT 5")
     fun getCurrentPageWords(): Flow<List<Word>>
     
     /**

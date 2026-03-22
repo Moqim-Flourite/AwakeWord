@@ -127,7 +127,7 @@ fun LockScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(
-                    items = currentPageWords.take(8),
+                    items = currentPageWords.take(5),
                     key = { it.id }
                 ) { word ->
                     WordCardCompact(
@@ -145,9 +145,9 @@ fun LockScreen(
                 
                 // 底部提示
                 item {
-                    if (currentPageWords.size > 8) {
+                    if (currentPageWords.size > 5) {
                         Text(
-                            text = "还有 ${currentPageWords.size - 8} 个单词等待复习...",
+                            text = "还有 ${currentPageWords.size - 5} 个单词等待复习...",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary,
                             textAlign = TextAlign.Center,

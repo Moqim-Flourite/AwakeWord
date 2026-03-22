@@ -32,7 +32,7 @@ class MainViewModel(
     private val _importState = MutableStateFlow<ImportState>(ImportState.Idle)
     val importState: StateFlow<ImportState> = _importState.asStateFlow()
     
-    // 当前批次的单词ID（固定8个，全部勾选完才刷新）
+    // 当前批次的单词ID（固定5个，全部勾选完才刷新）
     private val _currentBatchIds = MutableStateFlow<Set<Long>>(emptySet())
     
     // 当前页显示的单词（当前批次内的单词，未勾选在前，已勾选在后）
@@ -55,11 +55,11 @@ class MainViewModel(
         .stateIn(viewModelScope, SharingStarted.Lazily, false)
     
     /**
-     * 初始化当前批次（取前8个未勾选单词）
+     * 初始化当前批次（取前5个未勾选单词）
      */
     fun initCurrentBatch() {
         viewModelScope.launch {
-            val uncheckedWords = repository.getUncheckedWordsOnce().take(8)
+            val uncheckedWords = repository.getUncheckedWordsOnce().take(5)
             if (uncheckedWords.isNotEmpty()) {
                 _currentBatchIds.value = uncheckedWords.map { it.id }.toSet()
             }
@@ -72,8 +72,8 @@ class MainViewModel(
     fun refreshToNextPage() {
         viewModelScope.launch {
             // 先将当前批次的单词标记为已完成（或保持勾选状态）
-            // 然后取新的8个未勾选单词
-            val uncheckedWords = repository.getUncheckedWordsOnce().take(8)
+            // 然后取新的5个未勾选单词
+            val uncheckedWords = repository.getUncheckedWordsOnce().take(5)
             if (uncheckedWords.isNotEmpty()) {
                 _currentBatchIds.value = uncheckedWords.map { it.id }.toSet()
             } else {
